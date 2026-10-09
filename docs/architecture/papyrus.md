@@ -72,7 +72,12 @@ The decompiler itself is [`papyrus-decompile.md`](papyrus-decompile.md).
 - A failed start names the Wine it was started through and how to point houseCARL at another.
 - Pinned by `WindowsToolTests` (what Wine is handed, the `.pex` found, a Windows-path diagnostic, a missing Wine) with
   a recording stand-in for Wine; `PapyrusCompileEndToEndTests` run the real compiler through the real Wine when
-  `HOUSECARL_PAPYRUS_COMPILER` names it.
+  `HOUSECARL_PAPYRUS_COMPILER` names it (`HOUSECARL_TEST_WINE` the Wine, `HOUSECARL_WINEPREFIX` the prefix), and read
+  the vanilla sources from `Data_Core` while Amethyst has deployed. All five passed on Linux through Proton 11.0's Wine
+  against the Creation Kit's own compiler.
+- The Creation Kit's first launch unpacks `Data/Scripts.zip` and is known to crash under Wine at that step; the
+  compiler does not need the Creation Kit to run, so unpack the zip into the game's own Data (`Data_Core` while Amethyst
+  has deployed) by hand.
 
 ### The class hierarchy
 - The child→parent map is a SOFT dependency: a missing or partial map only leaves explicit casts in

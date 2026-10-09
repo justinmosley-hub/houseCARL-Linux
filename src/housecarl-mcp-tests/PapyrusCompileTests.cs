@@ -93,8 +93,10 @@ public sealed class PapyrusCompileEndToEndTests : IDisposable
         try { Directory.Delete(_work, recursive: true); } catch { /* temp scratch */ }
     }
 
+    // The game's own Data: Data_Core while Amethyst has deployed mods into Data, as houseCARL reads it.
     static string Vanilla =>
-        Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(PapyrusCompilerFactAttribute.Compiler))!, "Data", "Source", "Scripts");
+        Path.Combine(AmethystInstance.VanillaDataDir(Path.GetDirectoryName(Path.GetDirectoryName(PapyrusCompilerFactAttribute.Compiler))!),
+                     "Source", "Scripts");
 
     CompileResult Compile(string name) =>
         PapyrusCompile.CompileObject(PapyrusCompilerFactAttribute.Compiler, name, new[] { _work, Vanilla }, _out,
