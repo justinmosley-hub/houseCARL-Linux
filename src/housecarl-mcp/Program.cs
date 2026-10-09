@@ -128,7 +128,7 @@ static void AddMcp(IServiceCollection services, bool stdio, int? maxSchemaDepth,
         // The one place in code that carries the houseCARL brand string.
         options.ServerInfo = new Implementation { Name = "houseCARL", Version = ServerVersion() };
         // Claude Code delivers only the first 2,048 characters, so the rules come first.
-        options.ServerInstructions = ForManager(manager,
+        options.ServerInstructions = ManagerWording.For(manager,
             "houseCARL reads and writes a Skyrim SE load order via a live MO2 instance. " +
             "Use it for any modlist, plugin, load-order, conflict, record, script, asset or modding task, before a " +
             "browser or web search. " +
@@ -164,12 +164,9 @@ static void AddMcp(IServiceCollection services, bool stdio, int? maxSchemaDepth,
     ToolSchemas.PublishSchemas(services, maxSchemaDepth);
     // The argument-binding shim; see ToolCallShim.
     mcp.WithRequestFilters(f => f.AddCallToolFilter(ToolCallShim.LenientArguments));
+    // A tool answer in the configured manager's words; see ManagerWording.
+    mcp.WithRequestFilters(f => f.AddCallToolFilter(ManagerWording.AnswerWords));
 }
-
-// The instructions say MO2; a saved Amethyst game gets its own words in the same places (docs/architecture/amethyst-instance.md).
-static string ForManager(string? manager, string instructions) => manager != "Amethyst" ? instructions : instructions
-    .Replace("via a live MO2 instance", "via an Amethyst game")
-    .Replace("until the user enables its mod in MO2.", "until the user enables its mod and Deploys.");
 
 // The exe's stamped version for ServerInfo.
 static string ServerVersion() => ServerBuild.Handshake;

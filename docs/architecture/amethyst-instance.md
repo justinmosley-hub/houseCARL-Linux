@@ -103,6 +103,9 @@ were checked against Python before this was relied on. houseCARL creates the loc
 Amethyst has not yet. A setup that does not resolve takes no lock, and a call with no service (`bsa_extract` to a
 folder the caller named) takes none either. MO2 has no such lock: its hold is `ManagerInstance.NoHold`.
 
+A dry run takes Amethyst's operation lock like any call to a writing tool (the lock is per tool call, not per file
+written), so the lock file can appear before anything is written. It is empty, and Amethyst creates the same file.
+
 ### After an in-place edit: what the game reads
 An in-place write replaces the plugin's file (a staged temp renamed over it), so the file gets a new identity. What
 the game then reads depends on how Amethyst put that file into Data, and houseCARL checks the file actually there
@@ -117,19 +120,28 @@ compact over its source and each plugin it repoints) adds one sentence:
 A file in the game's own Data, read directly while nothing is deployed, gets no sentence. MO2 serves its files to the
 game live, so MO2's answer is null and its output is unchanged.
 
-houseCARL's messages were written for MO2 and say "MO2" (about 195 of them, spread over many renderers). Rather than
-reword each, the manager says once what differs: `IManagerInstance.WorkflowNote`, shown under `manager:` in
-`housecarl_load_order_status` and in the setup tool's answer. For Amethyst it says the messages mean Amethyst, where a
-new mod appears, and that a Deploy is needed. MO2's is null, so MO2 output is unchanged.
+### Messages in Amethyst's words
+houseCARL's messages were written for MO2 and say "MO2" in about 195 places. Most only name the manager, and for those
+the manager's note says what it means (`IManagerInstance.WorkflowNote`, under `manager:` in
+`housecarl_load_order_status` and in the setup tool's answer): for Amethyst, that the messages mean Amethyst, where a
+new mod appears, and that a Deploy is needed. MO2's note is null.
 
-A session reads the server's standing instructions before any tool answer, and those name MO2 twice. They are within
-5 characters of Claude Code's 2,048-character cut, so nothing can be added; instead a server started with an Amethyst
-game saved (`Program.ForManager`) says "via an Amethyst game" and "until the user enables its mod and Deploys" in
-those two places. A server configured during the session has already published its instructions; the setup tool's
-answer carries the note then. MO2's instructions are upstream's, unchanged.
+The phrases that tell the user what to DO are swapped, because a session acts on them: the advice after a new patch
+("enable it in MO2 to use the patch; MO2 adds a newly activated plugin…"), why a plugin is not loaded and its remedy
+("MO2 has not registered that mod folder — refresh MO2, then tick the plugin and sort"; for Amethyst a refresh, enabling
+the mod and a Deploy, since enabling ticks the plugin and puts it last), and the two places the standing instructions
+name MO2. They live in ONE table, `ManagerWording.AmethystPhrases`, most specific first, applied by
+`ManagerWording.For`:
+- to every tool answer, by a call-tool filter (`ManagerWording.AnswerWords`, registered beside upstream's
+  `ToolCallShim.LenientArguments`), which reads the manager when the answer is made, so a manager set mid-session counts;
+- to the standing instructions, when the server starts with an Amethyst game saved. Those sit within 5 characters of
+  Claude Code's 2,048-character cut, so the swap must not lengthen them past it; a test holds that. A server configured
+  during the session has already published its instructions, and the setup answer carries the note then.
 
-A dry run takes Amethyst's operation lock like any call to a writing tool (the lock is per tool call, not per file
-written), so the lock file can appear before anything is written. It is empty, and Amethyst creates the same file.
+A json answer spells an apostrophe `\u0027`, so each phrase is also swapped in that spelling. MO2's text is never
+touched. Each MO2 phrase must be verbatim in the server's source (`ManagerWordingTests`), so an upstream rewording
+fails a test instead of silently no longer being swapped. An independent test session against a real Amethyst install
+found the gap this closes: the write answer told the user only "enable it in MO2".
 
 ## Pinned by
 - `AmethystInstanceResolveTests` — every rule above on a synthetic setup: the roots, the active profile and its
@@ -147,7 +159,11 @@ written), so the lock file can appear before anything is written. It is empty, a
   cannot be taken; and a write leaves it free. The deploy tests are
   `[LinuxFact]`: Amethyst is Linux-only, and Windows needs admin rights to create symlinks.
 - `AmethystServerInstructionsTests` — the real server started on an Amethyst game publishes Amethyst's words, no
-  "MO2", inside the cut; `ServerInstructionsTests` holds the default text.
+  "MO2", inside the cut, and answers a read of a not-yet-listed patch over the wire in Amethyst's words;
+  `ServerInstructionsTests` holds the default text.
+- `ManagerWordingTests` — every MO2 phrase in the table is still the server's own words, MO2's text passes through
+  untouched, and an Amethyst answer loses every phrase in both spellings. `AmethystWriteTests` checks a real write
+  answer and the not-yet-active read in Amethyst's words.
 - `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
   files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.
 - `StatusInstanceProfileTests` and the MO2 resolve tests hold that MO2 is unchanged.

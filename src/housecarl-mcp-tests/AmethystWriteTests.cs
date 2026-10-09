@@ -178,6 +178,21 @@ public sealed class AmethystWriteTests : IDisposable
     }
 
     [Fact]
+    public void AWriteAnswerAndTheNotYetActiveReadTellAnAmethystUserWhatToDo()
+    {
+        using var svc = _a.Open();
+
+        var write = ManagerWording.For(svc.Manager, SetDamage(svc, 50, patch: "HcAwWords"));
+        Assert.Contains("mod folder: houseCARL - HcAwWords  — refresh Amethyst, enable it and Deploy to use the patch; Amethyst adds " +
+                        "a newly enabled plugin at the END of the load order, so it overrides what is already there", write);
+        Assert.DoesNotContain("MO2", write);
+
+        var read = ManagerWording.For(svc.Manager, RecordsTools.Records(svc, formids: new[] { _weapon }, source: Doc("\"HcAwWords.esp\"")));
+        Assert.Contains("NOT active — Amethyst has not listed that mod folder yet — refresh Amethyst, enable the mod, then Deploy", read);
+        Assert.DoesNotContain("MO2", read);
+    }
+
+    [Fact]
     public void StatusAndSetupSayWhatAmethystDoesDifferently()
     {
         using var svc = _a.Open();
