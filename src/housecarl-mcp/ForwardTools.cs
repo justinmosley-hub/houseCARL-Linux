@@ -50,7 +50,7 @@ public static class ForwardTools
         [Description("'text' (default) or 'json' (the same data). Either way the reply states, per record, what was copied and the winner it will out-rank once enabled; a forward whose version already wins is flagged redundant. " + LaneSentences.Epoch)]
             string? format = null,
         [Description("Character limit on the reply: the forwarded-record rows, then the read-back. " + LaneSentences.MaxCharsCut + ".")]
-            int max_chars = 0) => Guard.Tool(ToolNames.Forward, () =>
+            int max_chars = 0) => Guard.WriteTool(svc, ToolNames.Forward, () =>
     {
         // format first, ahead of the unconfigured-MO2 prompt; contract in docs/architecture/write-path.md.
         bool json = Wire.WantsJson(format, out var ferr);

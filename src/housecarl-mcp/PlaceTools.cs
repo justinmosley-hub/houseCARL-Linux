@@ -53,7 +53,7 @@ public static class PlaceTools
         [Description("Optional. 'text' (default) | 'json' (the same data, machine-readable, with the accounting and the enable-and-sort instruction in the document).")]
             string? format = null,
         [Description("Optional. Character ceiling on the whole response; the row that would cross it is not written, and a notice says how many were held back. The write is unaffected. The accounting line and the enable-and-sort instruction are always inside the ceiling. 0 = the server default (~40k).")]
-            int max_chars = 0) => Guard.Tool(ToolNames.Place, () =>
+            int max_chars = 0) => Guard.WriteTool(svc, ToolNames.Place, () =>
     {
         // format first, so the unconfigured-MO2 prompt answers a json caller as a document.
         bool json = Wire.WantsJson(format, out var ferr);
@@ -72,7 +72,7 @@ public static class PlaceTools
     internal static string Place(LoadOrderService svc, PlaceTarget[] assets, string? source_provider = null,
                                  string? kind = null, string? patch = null, string? into = null,
                                  string? format = null, int max_chars = 0)
-        => Guard.Tool(ToolNames.Place, () =>
+        => Guard.WriteTool(svc, ToolNames.Place, () =>
     {
         bool json = Wire.WantsJson(format, out var ferr);
         if (ferr is not null) return ferr;

@@ -32,7 +32,7 @@ public static class DecompileTools
         [Description("Optional. An existing houseCARL patch mod to add the .psc into instead of a fresh folder: its plugin filename (found even if you renamed its MO2 mod folder), or its mod-folder name, which also picks between two patches sharing a filename. A script folder holds no plugin: pass its base name (into='houseCARL_Scripts' for the default) or its mod-folder name.")]
             string? into = null,
         [Description("Optional. Absolute path to a folder of your choosing, created if missing; the .psc is written straight into it and houseCARL never deletes it. patch= and into= are then ignored.")]
-            string? out_path = null) => Guard.Tool(ToolNames.DecompileScript, () =>
+            string? out_path = null) => Guard.WriteTool(svc, ToolNames.DecompileScript, () =>
     {
         // 1) lane: out_path= supersedes patch=/into= saying so; the note is APPENDED, so a refusal opens with "error:".
         bool chosenOutput = !string.IsNullOrWhiteSpace(out_path);

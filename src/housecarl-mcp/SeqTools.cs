@@ -35,7 +35,7 @@ public static class SeqTools
         [Description("'text' (default) or 'json' (the same data, machine-readable).")]
             string? format = null,
         [Description("Character ceiling on the reply; past it trailing quest rows are cut with a notice. 0 = the server default (~40k).")]
-            int max_chars = 0) => Guard.Tool(ToolNames.WriteSeq, () =>
+            int max_chars = 0) => Guard.WriteTool(svc, ToolNames.WriteSeq, () =>
     {
         bool json = Wire.WantsJson(format, out var ferr);
         if (ferr is not null) return ferr;

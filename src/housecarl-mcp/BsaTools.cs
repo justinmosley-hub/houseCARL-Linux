@@ -109,7 +109,7 @@ public static class BsaTools
         [Description("Optional. Absolute path to the folder to unpack into. Omit for a new houseCARL mod folder under your mods directory; its path is reported.")]
             string? out_path = null,
         [Description("Optional. Extract only the files matching these, as " + ToolNames.BsaList + " under=; matching none is refused.")]
-            string[]? under = null) => Guard.Tool(ToolNames.BsaExtract, () =>
+            string[]? under = null) => Guard.WriteTool(svc, ToolNames.BsaExtract, () =>
     {
         if (string.IsNullOrWhiteSpace(archive)) return "error: no archive given. Pass the full path to the .bsa.";
         try { archive = Path.GetFullPath(archive.Trim().Trim('"')); }
@@ -203,7 +203,7 @@ public static class BsaTools
         [Description("Optional, default false. Compress the archive. Compression breaks any sounds or voices in it, so leave it false if the folder contains audio.")]
             bool compress = false,
         [Description("Optional. An existing houseCARL patch to place the .bsa into instead of a new folder; the archive takes that folder's name without the 'houseCARL - ' prefix. Pass the patch's plugin filename (found even if you renamed its MO2 folder), or the mod-folder name when two patches share a filename.")]
-            string? into = null) => Guard.Tool(ToolNames.BsaRepack, () =>
+            string? into = null) => Guard.WriteTool(svc, ToolNames.BsaRepack, () =>
     {
         if (string.IsNullOrWhiteSpace(source_folder)) return "error: no source_folder given.";
         source_folder = Path.GetFullPath(source_folder.Trim().Trim('"'));

@@ -140,6 +140,43 @@ public sealed class AmethystWriteTests : IDisposable
         Assert.Contains("the deployed Data has no 'HcAwOwn.esp', so the game sees this edit only after a Deploy in Amethyst.", EditInPlace(svc));
     }
 
+    string OperationLock => Path.Combine(_a.Staging, AmethystInstance.OperationLockFileName);
+
+    /// <summary>The lock as Amethyst takes it for a deploy or install: exclusive, and never waiting.</summary>
+    FileStream LockAsAmethystDoes() =>
+        new(OperationLock, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+
+    [Fact]
+    public void WhileAmethystDeploysAWriteIsRefusedAndWritesNothing()
+    {
+        using var svc = _a.Open();
+        string answer;
+        using (LockAsAmethystDoes())
+            answer = SetDamage(svc, 50, patch: "HcAwBusy");
+
+        Assert.Equal("error: Amethyst is deploying or installing into this game right now, so houseCARL wrote nothing; " +
+                     "run this again when Amethyst finishes.", answer);
+        Assert.False(Directory.Exists(Path.Combine(OwnMods, "houseCARL - HcAwBusy")));
+        Assert.Contains("wrote HcAwBusy.esp", SetDamage(svc, 50, patch: "HcAwBusy"));   // and once it finishes, the same call lands
+    }
+
+    [Fact]
+    public void WhileHouseCarlWritesAmethystCannotStartADeploy()
+    {
+        using (new AmethystManagerInstance(_a.GameConfig).HoldForWrite())
+            Assert.ThrowsAny<IOException>(() => LockAsAmethystDoes());
+        using (LockAsAmethystDoes()) { }   // released with the hold
+    }
+
+    [Fact]
+    public void AWriteLeavesTheLockFree()
+    {
+        using var svc = _a.Open();
+        SetDamage(svc, 50, patch: "HcAwFree");
+
+        using (LockAsAmethystDoes()) { }
+    }
+
     [Fact]
     public void StatusAndSetupSayWhatAmethystDoesDifferently()
     {

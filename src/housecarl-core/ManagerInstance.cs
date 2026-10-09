@@ -21,6 +21,11 @@ public interface IManagerInstance
     /// sentence, or null when the manager serves its files to the game live (MO2) or the path is none of its files.</summary>
     string? DeployedNote(string writtenPath);
 
+    /// <summary>Hold the manager's own lock for the length of a houseCARL write, so the write never overlaps the manager's
+    /// deploy or install; dispose to release. Throws <see cref="ManagerBusyException"/> when the manager holds it. MO2
+    /// has no such lock and returns <see cref="ManagerInstance.NoHold"/>.</summary>
+    IDisposable HoldForWrite();
+
     /// <summary>The folder this instance was configured with.</summary>
     string Location { get; }
 
@@ -46,6 +51,11 @@ public interface IManagerInstance
 
 public static class ManagerInstance
 {
+    /// <summary>The hold of a manager with no lock to take.</summary>
+    public static readonly IDisposable NoHold = new Nothing();
+
+    sealed class Nothing : IDisposable { public void Dispose() { } }
+
     /// <summary>The manager the folder belongs to: an MO2 instance (ModOrganizer.ini), else an Amethyst game's config
     /// folder (paths.json) or staging folder, else MO2 — whose resolve then names what is missing, Amethyst included.
     /// Never throws, so a bad configured folder surfaces on the first call, as it always has.</summary>
@@ -55,4 +65,11 @@ public static class ManagerInstance
         if (File.Exists(Mo2Instance.IniPath(dir))) return new Mo2ManagerInstance(dir);
         return AmethystInstance.GameConfigFor(dir) is { } gameConfig ? new AmethystManagerInstance(gameConfig) : new Mo2ManagerInstance(dir);
     }
+}
+
+/// <summary>The mod manager is changing the game's files right now (an Amethyst deploy or install), so houseCARL wrote
+/// nothing; a transient to retry, like <see cref="ProfileUnreadableException"/>.</summary>
+public sealed class ManagerBusyException : IOException
+{
+    public ManagerBusyException(string message, Exception inner) : base(message, inner) { }
 }

@@ -189,6 +189,28 @@ public static class AmethystInstance
                "or copy keeps the old file, or another mod wins it) — Deploy in Amethyst to pick it up.";
     }
 
+    /// <summary>The file Amethyst locks (flock, exclusive) while a deploy or install changes a game's files; in the
+    /// staging root (Amethyst's <c>game_mutation_lock</c>).</summary>
+    public const string OperationLockFileName = ".amethyst-operation.lock";
+
+    /// <summary>Take Amethyst's operation lock for a houseCARL write: refused by name while Amethyst holds it, and while
+    /// houseCARL holds it Amethyst's own deploy stops with "already modifying this game's profiles". A setup that does
+    /// not resolve takes no lock and leaves the write to refuse in its own words.</summary>
+    public static IDisposable HoldForWrite(string gameConfigDir)
+    {
+        if (!TryResolve(gameConfigDir, out var p) || p is null) return ManagerInstance.NoHold;
+        var stagingRoot = Path.GetDirectoryName(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(p.ProfileDir)))!;
+        var options = new FileStreamOptions { Mode = FileMode.OpenOrCreate, Access = FileAccess.ReadWrite, Share = FileShare.None };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;   // Amethyst's 0600
+        try { return new FileStream(Path.Combine(stagingRoot, OperationLockFileName), options); }   // FileShare.None is flock(LOCK_EX) off Windows
+        catch (IOException ex) when (FileInUse.Is(ex))
+        {
+            throw new ManagerBusyException(
+                "Amethyst is deploying or installing into this game right now, so houseCARL wrote nothing; run this again " +
+                "when Amethyst finishes.", ex);
+        }
+    }
+
     /// <summary>The path as the game's Data sees it: below a mod folder, the overwrite folder, or the game's own Data.</summary>
     static string? DataRelative(string path, ManagerInstancePaths p)
     {
@@ -291,6 +313,7 @@ public sealed class AmethystManagerInstance(string gameConfigDir) : IManagerInst
     public bool PartialLoadOrder => true;
     public string? WorkflowNote => AmethystInstance.WorkflowNote;
     public string? DeployedNote(string writtenPath) => AmethystInstance.DeployedNote(Location, writtenPath);
+    public IDisposable HoldForWrite() => AmethystInstance.HoldForWrite(Location);
     public string ModsDirFor(string profileDir, string activeModsDir) => AmethystInstance.ModsDirFor(profileDir);
 
     public ManagerInstancePaths Resolve() => AmethystInstance.Resolve(Location);

@@ -88,6 +88,21 @@ Amethyst's profile files. What Amethyst then does, read from its source:
   and writes `key = value`. The ownership check (`HousecarlOwnerMeta.MarksOwned`) ignores case and spaces, so a
   patch stays houseCARL's.
 
+### A write never overlaps an Amethyst deploy or install
+While Amethyst deploys or installs, it holds an exclusive `flock` on `.amethyst-operation.lock` in the staging root
+(`game_mutation_lock` in its `Utils/deployment/locking.py`), and a second deploy that finds it held stops with "already
+modifying this game's profiles". houseCARL takes the same lock for the whole of every tool call that writes files:
+`Guard.WriteTool` (in place of `Guard.Tool` on the 15 tools not marked `ReadOnly`) holds
+`IManagerInstance.HoldForWrite()` around the tool body. So:
+- while Amethyst holds it, a write is refused before it starts, in one sentence (`ManagerBusyException`, which `Guard`
+  answers like the MO2 profile-lock transient) and nothing is written;
+- while houseCARL holds it, an Amethyst deploy or install stops with its own message and can simply be run again.
+
+.NET's `FileShare.None` is an exclusive `flock` off Windows, the same lock Python's `fcntl.flock` takes; both directions
+were checked against Python before this was relied on. houseCARL creates the lock file with Amethyst's mode (0600) if
+Amethyst has not yet. A setup that does not resolve takes no lock, and a call with no service (`bsa_extract` to a
+folder the caller named) takes none either. MO2 has no such lock: its hold is `ManagerInstance.NoHold`.
+
 ### After an in-place edit: what the game reads
 An in-place write replaces the plugin's file (a staged temp renamed over it), so the file gets a new identity. What
 the game then reads depends on how Amethyst put that file into Data, and houseCARL checks the file actually there
@@ -118,7 +133,9 @@ new mod appears, and that a Deploy is needed. MO2's is null, so MO2 output is un
 - `AmethystWriteTests` — a new patch lands in the active profile's own mods folder and never the shared one, stays
   houseCARL's after its `meta.ini` is rewritten in `configparser`'s format (an `into=` extends it), the status and
   setup answers carry the Amethyst note while MO2's carry none, and an in-place edit says what the game reads for each
-  deploy: not deployed, symlink, hardlink, copy, and a deploy that left the mod out. The deploy tests are
+  deploy: not deployed, symlink, hardlink, copy, and a deploy that left the mod out. While Amethyst's operation lock is
+  held, a write is refused by name and writes nothing, then lands once it is free; while houseCARL writes, the lock
+  cannot be taken; and a write leaves it free. The deploy tests are
   `[LinuxFact]`: Amethyst is Linux-only, and Windows needs admin rights to create symlinks.
 - `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
   files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.

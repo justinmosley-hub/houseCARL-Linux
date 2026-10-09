@@ -36,7 +36,7 @@ public static class RemoveTools
         [Description("'text' (default) or 'json' (the same data). Either way the reply states what was removed, the masters left, and how many records remain (0: the file now holds none). " + LaneSentences.Epoch)]
             string? format = null,
         [Description("Character limit on the reply. " + LaneSentences.MaxCharsCut + ".")]
-            int max_chars = 0) => Guard.Tool(ToolNames.Remove, () =>
+            int max_chars = 0) => Guard.WriteTool(svc, ToolNames.Remove, () =>
     {
         // format first, ahead of the unconfigured-MO2 prompt; contract in docs/architecture/write-path.md.
         bool json = Wire.WantsJson(format, out var ferr);

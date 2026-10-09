@@ -53,7 +53,7 @@ public static class ApplyTools
         [Description("'text' (default) or 'json' (the same data). " + LaneSentences.Epoch)]
             string? format = null,
         [Description("Character limit on the reply: in json the applied-op rows and the read-back, in text the read-back. " + LaneSentences.MaxCharsCut + "; raise it for a readback=true dump.")]
-            int max_chars = 0) => Guard.Tool(ToolNames.Apply, () =>
+            int max_chars = 0) => Guard.WriteTool(svc, ToolNames.Apply, () =>
     {
         // ---- TRANSPORT: format --------------------------------------------------------------------------
         // Ahead of the unconfigured-MO2 prompt; contract in docs/architecture/write-path.md.

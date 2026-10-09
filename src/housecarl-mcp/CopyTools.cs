@@ -44,7 +44,7 @@ public static class CopyTools
         [Description("Base filename for the new patch plugin and its mod folder (default: new_editorid= when cloning, else 'Patch'). " + LaneSentences.PatchSuffix)]
             string? patch = null,
         [Description(LaneSentences.IntoLead + LaneSentences.IntoFound)]
-            string? into = null) => Guard.Tool(ToolNames.Copy, () =>
+            string? into = null) => Guard.WriteTool(svc, ToolNames.Copy, () =>
     {
         if (svc.ConfigPromptOrNull() is { } prompt) return prompt;
 

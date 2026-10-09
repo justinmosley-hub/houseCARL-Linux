@@ -229,7 +229,7 @@ public static class NifTools
         [Description("Optional, default false. Overwrite the chosen loose copy (the winner, or the copy source_provider= names) where it sits instead of writing a new folder, with no backup; editing a shadowed copy leaves the game loading the winner. Needs acknowledge=true on the first in-place edit of a mesh. Omit to write a new override and leave the original untouched.")]
             bool in_place = false,
         [Description("Optional, default false. Confirms the one-time in-place trade-off for this file: needed only on the first in-place edit of a given mesh, and not again once one has landed; a call that is refused records nothing, so it may be needed again. It waives the consent to overwrite the original only, never the mesh verification.")]
-            bool acknowledge = false) => Guard.Tool(ToolNames.NifSet, () =>
+            bool acknowledge = false) => Guard.WriteTool(svc, ToolNames.NifSet, () =>
     {
         if (svc.ConfigPromptOrNull() is { } prompt) return prompt;
         // in_place= ignores patch=, so with it the conflict is into= beside in_place=, which the service refuses before any work.

@@ -11,8 +11,15 @@ internal static class Guard
         try { return body(); }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (ProfileUnreadableException ex) { return Transient(ex); }
+        catch (ManagerBusyException ex) { return "error: " + ex.Message; }
         catch (Exception ex) { return Named(tool, ex); }
     }
+
+    /// <summary>As <see cref="Tool(string, Func{string}, CancellationToken)"/> for a tool that writes files: the mod manager's
+    /// write lock is held for the whole call (<see cref="IManagerInstance.HoldForWrite"/>), so the write never overlaps
+    /// the manager's own deploy or install. No service (a lane that writes only where the caller named) takes no lock.</summary>
+    public static string WriteTool(LoadOrderService? svc, string tool, Func<string> body, CancellationToken ct = default) =>
+        Tool(tool, () => { using var hold = svc?.HoldManagerForWrite() ?? ManagerInstance.NoHold; return body(); }, ct);
 
     /// <summary>The async twin, for tool bodies that await.</summary>
     public static async Task<string> Tool(string tool, Func<Task<string>> body, CancellationToken ct = default)

@@ -128,6 +128,7 @@ public sealed class Mo2ManagerInstance(string instanceDir) : IManagerInstance
     public bool PartialLoadOrder => false;
     public string? WorkflowNote => null;
     public string? DeployedNote(string writtenPath) => null;
+    public IDisposable HoldForWrite() => ManagerInstance.NoHold;
     public string ModsDirFor(string profileDir, string activeModsDir) => activeModsDir;
     public ManagerInstancePaths Resolve() => Mo2Instance.Resolve(Location);
     public bool TryResolve(out ManagerInstancePaths? paths) => Mo2Instance.TryResolve(Location, out paths);

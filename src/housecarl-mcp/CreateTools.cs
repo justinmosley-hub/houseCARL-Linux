@@ -42,7 +42,7 @@ public static class CreateTools
         [Description("'text' (default) or 'json' (the same data). " + LaneSentences.Epoch)]
             string? format = null,
         [Description("Character limit on the reply: the created-record rows with their FormIDs, the voice, result-script and cell reports, then the read-back, in that order. " + LaneSentences.MaxCharsCut + ".")]
-            int max_chars = 0) => Guard.Tool(ToolNames.Create, () =>
+            int max_chars = 0) => Guard.WriteTool(svc, ToolNames.Create, () =>
     {
         // ---- TRANSPORT: format --------------------------------------------------------------------------
         // Resolved BEFORE the unconfigured-MO2 prompt; contract in docs/architecture/write-path.md.
