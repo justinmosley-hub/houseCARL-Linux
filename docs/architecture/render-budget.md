@@ -46,6 +46,19 @@ whatever the budget, the answer ships and `RenderCap.Settle` appends an overrun 
 clears it in one step. The notice is part of the response whose length it states, so it settles to a fixed
 point. The merged sweep's `max_chars_overrun` has the same shape (#361).
 
+A text render that writes several lists in a row lays them through `BatchRender.AppendSections`: each section's
+heading always renders, and a line is written only when it fits whole with room held for every LATER section's
+floor (its heading and its cut notice) and for its own cut notice, which is held only while lines remain, so a list
+that fits is not cut for it (#641). `load_order_status`, `update_status` and `bsa_list` lay their lists this way (#1016).
+
+The json write renders (apply, create, write_seq, remove, forward, place) bound their rows with `RowRoom`. Rows are
+the only part of those documents that grows, so `RowRoom.Fit` renders the document whole and keeps it when it fits;
+otherwise it renders it with no rows at all — every list cut, every `rendered_*` count at its total, the widest it
+can be — and the rows then share what the cap leaves, each admitted on a cost `MeasureUnit` takes before it is
+written (a list's first row also pays `NonEmptyCloseCost`). The read-back block admits a record with no fields and
+then each field, so a long record is still cut inside. When even the no-row document misses the cap, the answer
+ships with no rows, true counts, and `max_chars_overrun`.
+
 ### A merged response water-fills its body budget over measured demand
 
 `housecarl_check` can run several families in one response, and the room its body may occupy is divided
@@ -221,6 +234,10 @@ reaches only the calling test's flow) is the meter's clock for tests.
 
 ## Pinned by
 
+- *The bound holds by layout*: `TextSectionsCapTests` and `WriteRenderCapTests` fill the three text renders and the
+  six json write renders past their cap and read caps from each one's floor to past its full answer; none comes back
+  longer than its cap, and on the renders before #1016's fix every one did. `WriteRenderCapTests` also holds that a cut
+  answer's `rendered_*` counts match its arrays and that an answer under its floor counts zero rows.
 - *The unit is CHARACTERS, not bytes*: `CheckCapCharsTests` — non-ASCII is carried unescaped, the overrun notice
   states its own length and clears in one step, and an astral character escapes and is counted as written. Each
   transport states its own length about the same sweep (`TheTextLaneStatesItsOwnLengthOnTheSameSweep` for text); no

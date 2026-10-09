@@ -102,52 +102,64 @@ static class JsonWire
         return Finish(ms);
     }
 
-    /// <summary>Is the document already at its char ceiling? Flushes first, because the writer buffers.</summary>
-    static bool Over(Utf8JsonWriter w, CharCountedStream ms, int cap)
-    {
-        w.Flush();
-        return Chars(ms) >= cap;
-    }
-
     /// <summary>The post-write read-back block, one construction for apply / create / forward: <c>readback_source</c>
     /// names the WRITTEN FILE's content or a dry run's in-memory would-be content, never load-order truth, and
     /// <c>readback_requested</c> carries the caller's ask; <c>readback_full</c> describes this document and must not
     /// be made to carry that ask, pinned by <c>WriteSurfaceInPlaceTransportTests.ForcedReadbackIsReportedFull</c>
     /// ("an in-place lane that FORCED the read-back reports readback_full:true, ask kept separately").</summary>
-    static void WriteReadbackBlock(Utf8JsonWriter w, CharCountedStream ms, int cap,
+    static void WriteReadbackBlock(Utf8JsonWriter w, RowRoom room,
         IReadOnlyList<WritePatchBuilder.FullReadback> rb, bool dryRun, bool requested, ref bool truncated)
     {
         w.WriteString("readback_source", dryRun ? "in_memory_would_be_content" : "written_file");
         w.WriteBoolean("readback_full", true);
         w.WriteBoolean("readback_requested", requested);
         w.WriteStartArray("readback");
+        int shown = 0;
         foreach (var r in rb)
         {
-            if (Over(w, ms, cap)) { truncated = true; break; }
-            w.WriteStartObject();
-            w.WriteString("formid", FormIdToken.Of(r.Target));
-            if (r.Error is not null) w.WriteString("error", r.Error);
-            else
+            // A record is admitted with no fields, then each field on its own, so a long record is cut inside, as before.
+            if (!room.Admit(w, shown > 0, x => WriteReadbackRecord(x, r, null))) { truncated = true; break; }
+            if (WriteReadbackRecord(w, r, room)) truncated = true;
+            shown++;
+        }
+        w.WriteEndArray();
+    }
+
+    /// <summary>One read-back record; its fields are admitted through <paramref name="room"/>, or none are written
+    /// when it is null — the shape a record is admitted on. True when a field was cut.</summary>
+    static bool WriteReadbackRecord(Utf8JsonWriter w, WritePatchBuilder.FullReadback r, RowRoom? room)
+    {
+        bool cut = false;
+        w.WriteStartObject();
+        w.WriteString("formid", FormIdToken.Of(r.Target));
+        if (r.Error is not null) w.WriteString("error", r.Error);
+        else
+        {
+            var rec = r.Record!;
+            w.WriteString("type", rec.Type);
+            WriteNullable(w, "editorid", rec.EditorId);
+            w.WriteNumber("field_count", rec.Fields.Count);
+            w.WriteStartArray("fields");
+            int shown = 0;
+            foreach (var f in rec.Fields)
             {
-                var rec = r.Record!;
-                w.WriteString("type", rec.Type);
-                WriteNullable(w, "editorid", rec.EditorId);
-                w.WriteNumber("field_count", rec.Fields.Count);
-                w.WriteStartArray("fields");
-                foreach (var f in rec.Fields)
+                if (room is null) break;
+                void Field(Utf8JsonWriter w)
                 {
-                    if (Over(w, ms, cap)) { truncated = true; break; }
                     w.WriteStartObject();
                     // The read's own leaf writer, so a flags decode and a blob's annotation render as a read does.
                     WriteLeaf(w, f);
                     if (f.BytesFormVersion is { } bfv) w.WriteNumber("opaque_form_version", bfv);
                     w.WriteEndObject();
                 }
-                w.WriteEndArray();
+                if (!room.Admit(w, shown > 0, Field)) { cut = true; break; }
+                Field(w);
+                shown++;
             }
-            w.WriteEndObject();
+            w.WriteEndArray();
         }
-        w.WriteEndArray();
+        w.WriteEndObject();
+        return cut;
     }
 
     /// <summary>The loose roots a render names, as a bounded array plus its sibling count — the json twin of
@@ -1707,6 +1719,31 @@ static class JsonWire
         return measure(w, () => Size(w, ms));
     }
 
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<int, int> NonEmptyCloses = new();
+
+    /// <summary>What an array of units at <paramref name="depth"/> pays to close once it holds one — its closing
+    /// bracket on a line of its own, where an empty array writes <c>[]</c> — over what <see cref="MeasureUnit"/>
+    /// charges the units themselves.</summary>
+    internal static int NonEmptyCloseCost(int depth) => NonEmptyCloses.GetOrAdd(depth, d =>
+    {
+        int Doc(bool one)
+        {
+            using var ms = new CharCountedStream();
+            using (var w = new Utf8JsonWriter(ms, Opts))
+            {
+                w.WriteStartObject();
+                for (int i = 2; i < d; i++) w.WriteStartObject("n");
+                w.WriteStartArray("rows");
+                if (one) w.WriteNullValue();
+                w.WriteEndArray();
+                for (int i = 2; i < d; i++) w.WriteEndObject();
+                w.WriteEndObject();
+            }
+            return Chars(ms);
+        }
+        return Doc(true) - Doc(false) - MeasureUnit(d, false, x => x.WriteNullValue());
+    });
+
     /// <summary>The common case: a unit written in one span.</summary>
     internal static int MeasureUnit(int depth, bool subsequent, Action<Utf8JsonWriter> write)
         => MeasureUnit(depth, subsequent, (w, size) => { int before = size(); write(w); return size() - before; });
@@ -2258,6 +2295,9 @@ static class JsonWire
     /// first-touch in-place consent prompt is its own flag.</summary>
     /// <param name="lane">the lane the call named, passed in rather than derived off the outcome's defaulted flags.</param>
     public static string RenderPatchOutcome(WritePatchBuilder.PatchOutcome o, int maxChars, bool readback, string lane)
+        => RowRoom.Fit(Wire.Cap(maxChars), room => RenderPatchOutcome(o, maxChars, readback, lane, room));
+
+    static string RenderPatchOutcome(WritePatchBuilder.PatchOutcome o, int maxChars, bool readback, string lane, RowRoom room)
     {
         int cap = Wire.Cap(maxChars);
         using var ms = new CharCountedStream();
@@ -2308,42 +2348,46 @@ static class JsonWire
             bool truncated = false;
             foreach (var op in o.Ops)
             {
-                if (Over(w, ms, cap)) { truncated = true; break; }
-                w.WriteStartObject();
-                w.WriteString("formid", FormIdToken.Of(op.Target));
-                w.WriteString("record_type", op.RecordType);
-                w.WriteString("label", op.Label);
-                w.WriteBoolean("applied", op.Applied);
-                WriteNullable(w, "error", op.Error);
-                WriteNullable(w, "after", op.After);
-                // The leaf as the WRITTEN FILE holds it, with `landed_source` naming a null. ON A SUPERSEDED OP it is
-                // the leaf's FINAL state after every op in the call, which `after_on_disk_is_final_leaf` marks.
-                WriteNullable(w, "after_on_disk", op.AfterOnDisk);
-                if (op.AfterOnDisk is not null && op.SupersededInCall)
-                    w.WriteBoolean("after_on_disk_is_final_leaf", true);
-                // The value came off the file and NOTHING parsed it: an opaque blob, with its length (#529).
-                if (op.AfterOnDiskBytes is { } ob) w.WriteNumber("after_on_disk_opaque_bytes", ob);
-                // The read's flags decode of the value the text edit line shows: the file's, or a dry run's `after`.
-                if ((o.DryRun ? op.Display : op.DisplayOnDisk) is { } disp) w.WriteString("display", disp);
-                WriteNullable(w, "landed", op.Landed);
-                // What the write DID that the file cannot say afterwards — today only the duplicate Add.
-                WriteNullable(w, "apply_note", op.ApplyNote);
-                // The file-vs-memory split, REPORTED not judged: `landed` in memory, `landed_on_disk` off the file.
-                WriteNullable(w, "landed_on_disk", op.LandedOnDisk);
-                // WHERE the clause came from, as a word rather than a verdict; the five values are in
-                // docs/architecture/json-wire.md.
-                w.WriteString("landed_source",
-                    op.RecordAbsentFromFile ? "record_absent"
-                    : op.SupersededInCall ? "superseded"
-                    : op.LandedOnDisk is not null ? "written_file"
-                    : op.VerifyAttempted ? "no_answer" : "not_checked");
-                w.WriteEndObject();
+                void Row(Utf8JsonWriter w)
+                {
+                    w.WriteStartObject();
+                    w.WriteString("formid", FormIdToken.Of(op.Target));
+                    w.WriteString("record_type", op.RecordType);
+                    w.WriteString("label", op.Label);
+                    w.WriteBoolean("applied", op.Applied);
+                    WriteNullable(w, "error", op.Error);
+                    WriteNullable(w, "after", op.After);
+                    // The leaf as the WRITTEN FILE holds it, with `landed_source` naming a null. ON A SUPERSEDED OP it is
+                    // the leaf's FINAL state after every op in the call, which `after_on_disk_is_final_leaf` marks.
+                    WriteNullable(w, "after_on_disk", op.AfterOnDisk);
+                    if (op.AfterOnDisk is not null && op.SupersededInCall)
+                        w.WriteBoolean("after_on_disk_is_final_leaf", true);
+                    // The value came off the file and NOTHING parsed it: an opaque blob, with its length (#529).
+                    if (op.AfterOnDiskBytes is { } ob) w.WriteNumber("after_on_disk_opaque_bytes", ob);
+                    // The read's flags decode of the value the text edit line shows: the file's, or a dry run's `after`.
+                    if ((o.DryRun ? op.Display : op.DisplayOnDisk) is { } disp) w.WriteString("display", disp);
+                    WriteNullable(w, "landed", op.Landed);
+                    // What the write DID that the file cannot say afterwards — today only the duplicate Add.
+                    WriteNullable(w, "apply_note", op.ApplyNote);
+                    // The file-vs-memory split, REPORTED not judged: `landed` in memory, `landed_on_disk` off the file.
+                    WriteNullable(w, "landed_on_disk", op.LandedOnDisk);
+                    // WHERE the clause came from, as a word rather than a verdict; the five values are in
+                    // docs/architecture/json-wire.md.
+                    w.WriteString("landed_source",
+                        op.RecordAbsentFromFile ? "record_absent"
+                        : op.SupersededInCall ? "superseded"
+                        : op.LandedOnDisk is not null ? "written_file"
+                        : op.VerifyAttempted ? "no_answer" : "not_checked");
+                    w.WriteEndObject();
+                }
+                if (!room.Admit(w, renderedOps > 0, Row)) { truncated = true; break; }
+                Row(w);
                 renderedOps++;
             }
             w.WriteEndArray();
-            w.WriteNumber("rendered_ops", renderedOps);
+            w.WriteNumber("rendered_ops", room.Shown(renderedOps, o.Ops.Count));
 
-            if (o.ReadBack is { } rb) WriteReadbackBlock(w, ms, cap, rb, o.DryRun, readback, ref truncated);
+            if (o.ReadBack is { } rb) WriteReadbackBlock(w, room, rb, o.DryRun, readback, ref truncated);
 
             WriteNullable(w, "warning", o.Warning);
             WriteNullable(w, "note", o.Note);
@@ -2364,6 +2408,9 @@ static class JsonWire
     /// <summary>The machine-readable twin of <see cref="WriteTools.RenderCreate"/>, on
     /// <see cref="RenderPatchOutcome"/>'s contract; the three post-write reports ride as data, not prose.</summary>
     public static string RenderCreateOutcome(WritePatchBuilder.CreateOutcome o, int maxChars, bool readback, string lane)
+        => RowRoom.Fit(Wire.Cap(maxChars), room => RenderCreateOutcome(o, maxChars, readback, lane, room));
+
+    static string RenderCreateOutcome(WritePatchBuilder.CreateOutcome o, int maxChars, bool readback, string lane, RowRoom room)
     {
         int cap = Wire.Cap(maxChars);
         using var ms = new CharCountedStream();
@@ -2431,63 +2478,67 @@ static class JsonWire
             bool truncated = false;
             foreach (var c in o.Created)
             {
-                if (Over(w, ms, cap)) { truncated = true; break; }
-                w.WriteStartObject();
-                w.WriteString("formid", FormIdToken.Of(c.FormKey));
-                w.WriteString("record_type", c.RecordType);
-                w.WriteString("editorid", c.EditorId);
-                // A replace is never silent (the CreatedRecord contract), as a flag rather than brackets.
-                w.WriteBoolean("replaced_existing", c.ReplacedExisting);
-                // The parent override this nested create hosted the child in, and whose version was copied.
-                WriteNullable(w, "parent_host", c.ParentHost);
-                w.WriteBoolean("parent_contested", c.ParentContested);
-                // The file's verdict as flags: `absent_from_file` says the create is not in the file, `verified` says
-                // the walk REACHED this record or completed, which reaches every record it did not find — not a
-                // claim about the ops one by one; the gate it puts on `landed_source` is in
-                // docs/architecture/json-wire.md.
-                w.WriteBoolean("verified", c.VerifyAttempted);
-                w.WriteBoolean("absent_from_file", c.AbsentFromFile);
-                if (c.ParentKey is { } pk) w.WriteString("parent_formid", FormIdToken.Of(pk));
-                w.WriteBoolean("parent_absent_from_file", c.ParentAbsentFromFile);
-                w.WriteStartArray("ops");
-                foreach (var op in c.Ops)
+                void Row(Utf8JsonWriter w)
                 {
                     w.WriteStartObject();
-                    w.WriteString("label", op.Label);
-                    w.WriteBoolean("applied", op.Applied);
-                    WriteNullable(w, "error", op.Error);
-                    WriteNullable(w, "after", op.After);
-                    // The leaf as the WRITTEN FILE holds it; identical keys to the apply lane (#683, #763).
-                    WriteNullable(w, "after_on_disk", op.AfterOnDisk);
-                    if (op.AfterOnDisk is not null && op.SupersededInCall)
-                        w.WriteBoolean("after_on_disk_is_final_leaf", true);
-                    // The value came off the file and NOTHING parsed it: an opaque blob, with its length (#529).
-                    if (op.AfterOnDiskBytes is { } ob) w.WriteNumber("after_on_disk_opaque_bytes", ob);
-                    if (op.DisplayOnDisk is { } disp) w.WriteString("display", disp);
-                    WriteNullable(w, "landed_on_disk", op.LandedOnDisk);
-                    w.WriteString("landed_source",
-                        op.RecordAbsentFromFile ? "record_absent"
-                        : op.SupersededInCall ? "superseded"
-                        : op.LandedOnDisk is not null ? "written_file"
-                        : op.VerifyAttempted ? "no_answer" : "not_checked");
-                    // `after` is a SENTENCE about what the write did, not a field reading: a CK-parity fill.
-                    if (op.AfterIsNote) w.WriteBoolean("after_is_note", true);
-                    WriteNullable(w, "apply_note", op.ApplyNote);
+                    w.WriteString("formid", FormIdToken.Of(c.FormKey));
+                    w.WriteString("record_type", c.RecordType);
+                    w.WriteString("editorid", c.EditorId);
+                    // A replace is never silent (the CreatedRecord contract), as a flag rather than brackets.
+                    w.WriteBoolean("replaced_existing", c.ReplacedExisting);
+                    // The parent override this nested create hosted the child in, and whose version was copied.
+                    WriteNullable(w, "parent_host", c.ParentHost);
+                    w.WriteBoolean("parent_contested", c.ParentContested);
+                    // The file's verdict as flags: `absent_from_file` says the create is not in the file, `verified` says
+                    // the walk REACHED this record or completed, which reaches every record it did not find — not a
+                    // claim about the ops one by one; the gate it puts on `landed_source` is in
+                    // docs/architecture/json-wire.md.
+                    w.WriteBoolean("verified", c.VerifyAttempted);
+                    w.WriteBoolean("absent_from_file", c.AbsentFromFile);
+                    if (c.ParentKey is { } pk) w.WriteString("parent_formid", FormIdToken.Of(pk));
+                    w.WriteBoolean("parent_absent_from_file", c.ParentAbsentFromFile);
+                    w.WriteStartArray("ops");
+                    foreach (var op in c.Ops)
+                    {
+                        w.WriteStartObject();
+                        w.WriteString("label", op.Label);
+                        w.WriteBoolean("applied", op.Applied);
+                        WriteNullable(w, "error", op.Error);
+                        WriteNullable(w, "after", op.After);
+                        // The leaf as the WRITTEN FILE holds it; identical keys to the apply lane (#683, #763).
+                        WriteNullable(w, "after_on_disk", op.AfterOnDisk);
+                        if (op.AfterOnDisk is not null && op.SupersededInCall)
+                            w.WriteBoolean("after_on_disk_is_final_leaf", true);
+                        // The value came off the file and NOTHING parsed it: an opaque blob, with its length (#529).
+                        if (op.AfterOnDiskBytes is { } ob) w.WriteNumber("after_on_disk_opaque_bytes", ob);
+                        if (op.DisplayOnDisk is { } disp) w.WriteString("display", disp);
+                        WriteNullable(w, "landed_on_disk", op.LandedOnDisk);
+                        w.WriteString("landed_source",
+                            op.RecordAbsentFromFile ? "record_absent"
+                            : op.SupersededInCall ? "superseded"
+                            : op.LandedOnDisk is not null ? "written_file"
+                            : op.VerifyAttempted ? "no_answer" : "not_checked");
+                        // `after` is a SENTENCE about what the write did, not a field reading: a CK-parity fill.
+                        if (op.AfterIsNote) w.WriteBoolean("after_is_note", true);
+                        WriteNullable(w, "apply_note", op.ApplyNote);
+                        w.WriteEndObject();
+                    }
+                    w.WriteEndArray();
                     w.WriteEndObject();
                 }
-                w.WriteEndArray();
-                w.WriteEndObject();
+                if (!room.Admit(w, rendered > 0, Row)) { truncated = true; break; }
+                Row(w);
                 rendered++;
             }
             w.WriteEndArray();
-            w.WriteNumber("rendered_created", rendered);
+            w.WriteNumber("rendered_created", room.Shown(rendered, o.Created.Count));
 
             // The three post-write reports are INSIDE the budget, like the text twin's.
-            WriteVoiceReport(w, o.Voice, ms, cap, ref truncated);
-            WriteScriptBindingReport(w, o.ScriptBinding, ms, cap, ref truncated);
-            WriteCellShellReport(w, o.CellShell, ms, cap, ref truncated);
+            WriteVoiceReport(w, o.Voice, room, cap, ref truncated);
+            WriteScriptBindingReport(w, o.ScriptBinding, room, cap, ref truncated);
+            WriteCellShellReport(w, o.CellShell, room, cap, ref truncated);
 
-            if (o.ReadBack is { } rb) WriteReadbackBlock(w, ms, cap, rb, false, readback, ref truncated);
+            if (o.ReadBack is { } rb) WriteReadbackBlock(w, room, rb, false, readback, ref truncated);
 
             WriteNullable(w, "warning", o.Warning);
             WriteNullable(w, "note", o.Note);
@@ -2508,6 +2559,9 @@ static class JsonWire
     /// <summary>The machine-readable twin of <see cref="SeqTools.Render"/>: the no-SGE-quests no-op, the null epoch
     /// with its reason, and the unchanged destination, all typed. <c>written</c> means THIS call wrote the file.</summary>
     public static string RenderSeqOutcome(SeqOutcome o, int maxChars, string? outputNote = null)
+        => RowRoom.Fit(Wire.Cap(maxChars), room => RenderSeqOutcome(o, maxChars, outputNote, room));
+
+    static string RenderSeqOutcome(SeqOutcome o, int maxChars, string? outputNote, RowRoom room)
     {
         int cap = Wire.Cap(maxChars);
         using var ms = new CharCountedStream();
@@ -2561,15 +2615,19 @@ static class JsonWire
             bool truncated = false;
             foreach (var q in o.Quests)
             {
-                if (Over(w, ms, cap)) { truncated = true; break; }
-                w.WriteStartObject();
-                WriteNullable(w, "editorid", q.EditorId is { Length: > 0 } e ? e : null);
-                w.WriteString("on_disk_formid", $"0x{q.OnDiskFormId:X8}");
-                w.WriteEndObject();
+                void Row(Utf8JsonWriter w)
+                {
+                    w.WriteStartObject();
+                    WriteNullable(w, "editorid", q.EditorId is { Length: > 0 } e ? e : null);
+                    w.WriteString("on_disk_formid", $"0x{q.OnDiskFormId:X8}");
+                    w.WriteEndObject();
+                }
+                if (!room.Admit(w, rendered > 0, Row)) { truncated = true; break; }
+                Row(w);
                 rendered++;
             }
             w.WriteEndArray();
-            w.WriteNumber("rendered_quests", rendered);
+            w.WriteNumber("rendered_quests", room.Shown(rendered, o.Quests.Count));
             w.WriteBoolean("truncated", truncated);
             // Not "raise max_chars to see the rest": widening the ceiling means re-issuing a WRITE.
             if (truncated)
@@ -2586,6 +2644,9 @@ static class JsonWire
     /// <summary>The machine-readable twin of <see cref="WriteTools.RenderRemoval"/>, on
     /// <see cref="RenderPatchOutcome"/>'s contract; <c>remaining_records:0</c> is the inert-shell fact.</summary>
     public static string RenderRemovalOutcome(WritePatchBuilder.RemovalOutcome o, int maxChars, string lane)
+        => RowRoom.Fit(Wire.Cap(maxChars), room => RenderRemovalOutcome(o, maxChars, lane, room));
+
+    static string RenderRemovalOutcome(WritePatchBuilder.RemovalOutcome o, int maxChars, string lane, RowRoom room)
     {
         int cap = Wire.Cap(maxChars);
         using var ms = new CharCountedStream();
@@ -2616,16 +2677,20 @@ static class JsonWire
             bool truncated = false;
             foreach (var r in o.Removed)
             {
-                if (Over(w, ms, cap)) { truncated = true; break; }
-                w.WriteStartObject();
-                w.WriteString("formid", FormIdToken.Of(r.Target));
-                w.WriteString("record_type", r.RecordType);
-                WriteNullable(w, "editorid", r.EditorId);
-                w.WriteEndObject();
+                void Row(Utf8JsonWriter w)
+                {
+                    w.WriteStartObject();
+                    w.WriteString("formid", FormIdToken.Of(r.Target));
+                    w.WriteString("record_type", r.RecordType);
+                    WriteNullable(w, "editorid", r.EditorId);
+                    w.WriteEndObject();
+                }
+                if (!room.Admit(w, rendered > 0, Row)) { truncated = true; break; }
+                Row(w);
                 rendered++;
             }
             w.WriteEndArray();
-            w.WriteNumber("rendered_removed", rendered);
+            w.WriteNumber("rendered_removed", room.Shown(rendered, o.Removed.Count));
 
             WriteNullable(w, "note", o.Note);
             w.WriteBoolean("truncated", truncated);
@@ -2644,6 +2709,9 @@ static class JsonWire
     /// <summary>The machine-readable twin of <see cref="WriteTools.RenderForward"/>, on
     /// <see cref="RenderPatchOutcome"/>'s contract; the bracketed per-record facts are flags here.</summary>
     public static string RenderForwardOutcome(WritePatchBuilder.ForwardOutcome o, int maxChars, bool readback, string lane)
+        => RowRoom.Fit(Wire.Cap(maxChars), room => RenderForwardOutcome(o, maxChars, readback, lane, room));
+
+    static string RenderForwardOutcome(WritePatchBuilder.ForwardOutcome o, int maxChars, bool readback, string lane, RowRoom room)
     {
         int cap = Wire.Cap(maxChars);
         using var ms = new CharCountedStream();
@@ -2689,24 +2757,28 @@ static class JsonWire
             bool truncated = false;
             foreach (var f in o.Forwarded)
             {
-                if (Over(w, ms, cap)) { truncated = true; break; }
-                w.WriteStartObject();
-                w.WriteString("formid", FormIdToken.Of(f.Target));
-                w.WriteString("record_type", f.RecordType);
-                WriteNullable(w, "editorid", f.EditorId);
-                w.WriteString("source", f.FromPlugin);
-                w.WriteBoolean("replaced_existing", f.ReplacedExisting);
-                // How many records nested under the replaced one were carried across.
-                w.WriteNumber("preserved_children", f.PreservedChildren);
-                w.WriteBoolean("was_already_winner", f.WasAlreadyWinner);
-                WriteNullable(w, "prior_winner", f.PriorWinner);
-                w.WriteEndObject();
+                void Row(Utf8JsonWriter w)
+                {
+                    w.WriteStartObject();
+                    w.WriteString("formid", FormIdToken.Of(f.Target));
+                    w.WriteString("record_type", f.RecordType);
+                    WriteNullable(w, "editorid", f.EditorId);
+                    w.WriteString("source", f.FromPlugin);
+                    w.WriteBoolean("replaced_existing", f.ReplacedExisting);
+                    // How many records nested under the replaced one were carried across.
+                    w.WriteNumber("preserved_children", f.PreservedChildren);
+                    w.WriteBoolean("was_already_winner", f.WasAlreadyWinner);
+                    WriteNullable(w, "prior_winner", f.PriorWinner);
+                    w.WriteEndObject();
+                }
+                if (!room.Admit(w, rendered > 0, Row)) { truncated = true; break; }
+                Row(w);
                 rendered++;
             }
             w.WriteEndArray();
-            w.WriteNumber("rendered_forwarded", rendered);
+            w.WriteNumber("rendered_forwarded", room.Shown(rendered, o.Forwarded.Count));
 
-            if (o.ReadBack is { } rb) WriteReadbackBlock(w, ms, cap, rb, o.DryRun, readback, ref truncated);
+            if (o.ReadBack is { } rb) WriteReadbackBlock(w, room, rb, o.DryRun, readback, ref truncated);
 
             WriteNullable(w, "warning", o.Warning);
             WriteNullable(w, "note", o.Note);
@@ -2985,6 +3057,9 @@ static class JsonWire
     /// <summary>The machine-readable twin of <see cref="PlaceWire"/>'s render, on the write surface's contract, with
     /// the "this does not win until you enable the mod" instruction in-band as <c>next_step</c>.</summary>
     public static string RenderPlaceOutcome(PlaceOutcome o, int maxChars, IReadOnlySet<string>? poleWithheld = null)
+        => RowRoom.Fit(Wire.Cap(maxChars), room => RenderPlaceOutcome(o, maxChars, poleWithheld, room));
+
+    static string RenderPlaceOutcome(PlaceOutcome o, int maxChars, IReadOnlySet<string>? poleWithheld, RowRoom room)
     {
         int cap = Wire.Cap(maxChars);
         using var ms = new CharCountedStream();
@@ -3016,8 +3091,10 @@ static class JsonWire
             foreach (var r in o.Results)
             {
                 // rendered > 0: the FIRST row always renders — the only place current_winner is stated.
-                if (rendered > 0 && Over(w, ms, cap)) { truncated = true; break; }
-                WritePlaceRow(w, r, modFolder, o.FreshFolder, poleWithheld?.Contains(r.AssetPath) == true);
+                bool withheld = poleWithheld?.Contains(r.AssetPath) == true;
+                if (!room.Admit(w, rendered > 0, x => WritePlaceRow(x, r, modFolder, o.FreshFolder, withheld), always: rendered == 0))
+                { truncated = true; break; }
+                WritePlaceRow(w, r, modFolder, o.FreshFolder, withheld);
                 rendered++;
             }
             w.WriteEndArray();
@@ -3070,7 +3147,7 @@ static class JsonWire
     }
 
     /// <summary>The voice-coverage report as data: the text render's "[!] WILL BE SILENT" becomes <c>fuz_present:false</c> and a path.</summary>
-    static void WriteVoiceReport(Utf8JsonWriter w, VoiceReport? report, CharCountedStream ms, int cap, ref bool truncated)
+    static void WriteVoiceReport(Utf8JsonWriter w, VoiceReport? report, RowRoom room, int cap, ref bool truncated)
     {
         if (report is null || report.IsEmpty) return;
         w.WriteStartObject("voice_coverage");
@@ -3080,37 +3157,45 @@ static class JsonWire
         w.WriteStartArray("lines");
         foreach (var l in report.Lines)
         {
-            if (Over(w, ms, cap)) { truncated = true; blockCut = true; break; }
-            w.WriteStartObject();
-            w.WriteString("info", FormIdToken.Of(l.Info));
-            WriteNullable(w, "topic_editorid", l.TopicEditorId);
-            w.WriteNumber("response", l.ResponseNumber);
-            w.WriteBoolean("fuz_present", l.FuzPresent);
-            w.WriteBoolean("lip_present", l.LipPresent);
-            WriteNullable(w, "fuz_path", l.FuzPath);
-            WriteNullable(w, "lip_path", l.LipPath);
-            WriteNullable(w, "fuz_winner", l.FuzWinner);
-            w.WriteBoolean("fuz_contended", l.FuzAmbiguous);
-            // An "absent" that merely went unscanned is not the same claim as one looked for and not found.
-            w.WriteBoolean("read_incomplete", l.ReadIncomplete);
-            w.WriteEndObject();
+            void Row(Utf8JsonWriter w)
+            {
+                w.WriteStartObject();
+                w.WriteString("info", FormIdToken.Of(l.Info));
+                WriteNullable(w, "topic_editorid", l.TopicEditorId);
+                w.WriteNumber("response", l.ResponseNumber);
+                w.WriteBoolean("fuz_present", l.FuzPresent);
+                w.WriteBoolean("lip_present", l.LipPresent);
+                WriteNullable(w, "fuz_path", l.FuzPath);
+                WriteNullable(w, "lip_path", l.LipPath);
+                WriteNullable(w, "fuz_winner", l.FuzWinner);
+                w.WriteBoolean("fuz_contended", l.FuzAmbiguous);
+                // An "absent" that merely went unscanned is not the same claim as one looked for and not found.
+                w.WriteBoolean("read_incomplete", l.ReadIncomplete);
+                w.WriteEndObject();
+            }
+            if (!room.Admit(w, renderedLines > 0, Row)) { truncated = true; blockCut = true; break; }
+            Row(w);
             renderedLines++;
         }
         w.WriteEndArray();
         w.WriteStartArray("undetermined");
         foreach (var u in report.Undetermined)
         {
-            if (Over(w, ms, cap)) { truncated = true; blockCut = true; break; }
-            w.WriteStartObject();
-            w.WriteString("info", FormIdToken.Of(u.Info));
-            WriteNullable(w, "topic_editorid", u.TopicEditorId);
-            w.WriteString("reason", u.Reason);
-            w.WriteEndObject();
+            void Row(Utf8JsonWriter w)
+            {
+                w.WriteStartObject();
+                w.WriteString("info", FormIdToken.Of(u.Info));
+                WriteNullable(w, "topic_editorid", u.TopicEditorId);
+                w.WriteString("reason", u.Reason);
+                w.WriteEndObject();
+            }
+            if (!room.Admit(w, renderedUndet > 0, Row)) { truncated = true; blockCut = true; break; }
+            Row(w);
             renderedUndet++;
         }
         w.WriteEndArray();
-        WriteBlockCensus(w, blockCut, ("lines", renderedLines, report.Lines.Count),
-                                      ("undetermined", renderedUndet, report.Undetermined.Count),
+        WriteBlockCensus(w, blockCut, ("lines", room.Shown(renderedLines, report.Lines.Count), report.Lines.Count),
+                                      ("undetermined", room.Shown(renderedUndet, report.Undetermined.Count), report.Undetermined.Count),
             "voice coverage", cap, WriteSentences.Twins.VoiceStake);
         w.WriteEndObject();
     }
@@ -3140,7 +3225,7 @@ static class JsonWire
 
     /// <summary>The result-script binding report as data; <c>status</c> is the enum the text render prints as
     /// "WILL NOT FIRE".</summary>
-    static void WriteScriptBindingReport(Utf8JsonWriter w, ScriptBindingReport? report, CharCountedStream ms, int cap, ref bool truncated)
+    static void WriteScriptBindingReport(Utf8JsonWriter w, ScriptBindingReport? report, RowRoom room, int cap, ref bool truncated)
     {
         if (report is null || report.IsEmpty) return;
         w.WriteStartObject("result_script_coverage");
@@ -3150,25 +3235,29 @@ static class JsonWire
         w.WriteStartArray("findings");
         foreach (var f in report.Findings)
         {
-            if (Over(w, ms, cap)) { truncated = true; blockCut = true; break; }
-            w.WriteStartObject();
-            w.WriteString("info", FormIdToken.Of(f.Info));
-            WriteNullable(w, "topic_editorid", f.TopicEditorId);
-            w.WriteString("status", f.Status.ToString());
-            w.WriteString("detail", f.Detail);
-            WriteStringArray(w, "missing_pex", f.MissingPex);
-            w.WriteBoolean("read_incomplete", f.ReadIncomplete);
-            w.WriteEndObject();
+            void Row(Utf8JsonWriter w)
+            {
+                w.WriteStartObject();
+                w.WriteString("info", FormIdToken.Of(f.Info));
+                WriteNullable(w, "topic_editorid", f.TopicEditorId);
+                w.WriteString("status", f.Status.ToString());
+                w.WriteString("detail", f.Detail);
+                WriteStringArray(w, "missing_pex", f.MissingPex);
+                w.WriteBoolean("read_incomplete", f.ReadIncomplete);
+                w.WriteEndObject();
+            }
+            if (!room.Admit(w, renderedFindings > 0, Row)) { truncated = true; blockCut = true; break; }
+            Row(w);
             renderedFindings++;
         }
         w.WriteEndArray();
-        WriteBlockCensus(w, blockCut, ("findings", renderedFindings, report.Findings.Count), null,
+        WriteBlockCensus(w, blockCut, ("findings", room.Shown(renderedFindings, report.Findings.Count), report.Findings.Count), null,
             "result-script coverage", cap, WriteSentences.Twins.ScriptStake);
         w.WriteEndObject();
     }
 
     /// <summary>The cell-shell report as data — a created cell is valid but EMPTY; <c>must_provide</c> is the work list.</summary>
-    static void WriteCellShellReport(Utf8JsonWriter w, CellShellReport? report, CharCountedStream ms, int cap, ref bool truncated)
+    static void WriteCellShellReport(Utf8JsonWriter w, CellShellReport? report, RowRoom room, int cap, ref bool truncated)
     {
         if (report is null || report.IsEmpty) return;
         w.WriteStartObject("cell_shell");
@@ -3178,17 +3267,21 @@ static class JsonWire
         w.WriteStartArray("cells");
         foreach (var c in report.Cells)
         {
-            if (Over(w, ms, cap)) { truncated = true; blockCut = true; break; }
-            w.WriteStartObject();
-            w.WriteString("cell", FormIdToken.Of(c.Cell));
-            w.WriteString("editorid", c.EditorId);
-            w.WriteBoolean("interior", c.Interior);
-            WriteStringArray(w, "must_provide", c.MustProvide);
-            w.WriteEndObject();
+            void Row(Utf8JsonWriter w)
+            {
+                w.WriteStartObject();
+                w.WriteString("cell", FormIdToken.Of(c.Cell));
+                w.WriteString("editorid", c.EditorId);
+                w.WriteBoolean("interior", c.Interior);
+                WriteStringArray(w, "must_provide", c.MustProvide);
+                w.WriteEndObject();
+            }
+            if (!room.Admit(w, renderedCells > 0, Row)) { truncated = true; blockCut = true; break; }
+            Row(w);
             renderedCells++;
         }
         w.WriteEndArray();
-        WriteBlockCensus(w, blockCut, ("cells", renderedCells, report.Cells.Count), null, "cell shell", cap,
+        WriteBlockCensus(w, blockCut, ("cells", room.Shown(renderedCells, report.Cells.Count), report.Cells.Count), null, "cell shell", cap,
             WriteSentences.Twins.CellStake, WriteSentences.CellRowsCutLoss);
         // The grid-occupancy seam the text render declares — a json consumer must not read "cells: []" as "checked".
         if (report.Cells.Any(c => !c.Interior))
