@@ -11,6 +11,11 @@ static class HarnessPaths
     /// <summary>Release or Debug — read off this assembly's own bin/&lt;config&gt;/net9.0 path.</summary>
     public static string Configuration { get; } = FindConfiguration();
 
+    /// <summary>The built server beside these tests. The apphost is <c>housecarl-mcp.exe</c> on Windows and
+    /// <c>housecarl-mcp</c> with no extension on Linux (see docs/linux-and-amethyst.md).</summary>
+    public static string ServerExe { get; } = Path.Combine(RepoRoot, "src", "housecarl-mcp", "bin", Configuration,
+                                                           "net9.0", OperatingSystem.IsWindows() ? "housecarl-mcp.exe" : "housecarl-mcp");
+
     static string FindRepoRoot()
     {
         for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
