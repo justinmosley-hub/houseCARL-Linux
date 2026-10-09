@@ -30,7 +30,7 @@ public sealed class PapyrusSourceRootsDiscoverTests : IDisposable
 
     string Mk(string mod, string layout, params string[] files)
     {
-        var d = Path.Combine(_root, mod, layout);
+        var d = DiskPath.Combine(Path.Combine(_root, mod), layout);
         Directory.CreateDirectory(d);
         foreach (var f in files) File.WriteAllText(Path.Combine(d, f), "Scriptname X\n");
         return d;
@@ -64,6 +64,19 @@ public sealed class PapyrusSourceRootsDiscoverTests : IDisposable
     {
         var le = DiscoverMixed()[1];
         Assert.Equal((_leDir, @"Scripts\Source"), (le.Dir, le.Layout));
+    }
+
+    // A mod authored on Windows can ship either layout in any casing; a case-sensitive disk must still find it.
+    [Fact]
+    public void ALayoutInOtherCasingIsFound()
+    {
+        var dir = Path.Combine(_root, "LowerCase", "source", "scripts");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "Lower.psc"), "Scriptname Lower\n");
+
+        var found = Assert.Single(PapyrusSourceRoots.Discover(new[] { Root("LowerCase") }));
+
+        Assert.True(File.Exists(Path.Combine(found.Dir, "Lower.psc")));
     }
 
     // Probe G: "a source folder with NO .psc contributes nothing (would widen the path for free)".
