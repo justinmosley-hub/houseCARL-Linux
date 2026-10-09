@@ -117,7 +117,9 @@ compact over its source and each plugin it repoints) adds one sentence:
   a Deploy picks it up;
 - nothing deployed at that path, or the profile not deployed: the game reads it after a Deploy;
 - VFS mode: the game reads it the next time Amethyst launches it.
-A file in the game's own Data, read directly while nothing is deployed, gets no sentence. MO2 serves its files to the
+Growing a patch that already exists (`into=` on apply, create, forward, copy, and remove) replaces its file the same
+way, so those answers carry the same sentence; a fresh patch does not, since Amethyst's own steps (refresh, enable,
+Deploy) cover it. A file in the game's own Data, read directly while nothing is deployed, gets no sentence. MO2 serves its files to the
 game live, so MO2's answer is null and its output is unchanged.
 
 ### Messages in Amethyst's words
@@ -156,7 +158,8 @@ found the gap this closes: the write answer told the user only "enable it in MO2
 - `AmethystWriteTests` — a new patch lands in the active profile's own mods folder and never the shared one, stays
   houseCARL's after its `meta.ini` is rewritten in `configparser`'s format (an `into=` extends it), the status and
   setup answers carry the Amethyst note while MO2's carry none, and an in-place edit says what the game reads for each
-  deploy: not deployed, symlink, hardlink, copy, and a deploy that left the mod out. While Amethyst's operation lock is
+  deploy: not deployed, symlink, hardlink, copy, and a deploy that left the mod out; growing a patch deployed by hardlink
+  or symlink says the same, and a fresh patch says nothing about it. While Amethyst's operation lock is
   held, a write is refused by name and writes nothing, then lands once it is free; while houseCARL writes, the lock
   cannot be taken; and a write leaves it free. The deploy tests are
   `[LinuxFact]`: Amethyst is Linux-only, and Windows needs admin rights to create symlinks.

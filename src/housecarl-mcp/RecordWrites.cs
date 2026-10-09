@@ -110,6 +110,7 @@ internal sealed partial class RecordWrites
             {
                 var outcome = WritePatchBuilder.Apply(resolver, rulebook, edits, outPath, extend, fullReadback, copyFromSources, dryRun);
                 if (!outcome.Success && created) RemoveFolderCreatedThisCall(outPath);   // a refused write leaves no orphan folder
+                if (ExtendDeployedNote(extend && !dryRun && outcome.Success, outPath) is { } deployed) outcome = outcome with { Note = JoinNotes(outcome.Note, deployed) };
                 return outcome;
             }
             finally { if (offOrderOverlays is not null) foreach (var d in offOrderOverlays) d.Dispose(); }
@@ -335,6 +336,11 @@ internal sealed partial class RecordWrites
         return outcome;
     }
 
+    /// <summary>After a write grew a patch that already existed: the manager's word on whether the game reads the new file
+    /// (<see cref="ILoadOrderHost.DeployedNote"/>), since an Amethyst hardlink or copy deploy keeps the old one; null for a
+    /// fresh patch, which the manager's own steps cover. Contract in docs/architecture/amethyst-instance.md.</summary>
+    string? ExtendDeployedNote(bool extendedAndLanded, string outPath) => extendedAndLanded ? _host.DeployedNote(outPath) : null;
+
     /// <summary>Resolve an active plugin's on-disk path by filename — exact match, then a lenient retry adding each plugin extension; null means no such active plugin.</summary>
     static string? ResolveActivePluginPath(LoadOrderResolver.IndexView view, string raw, out string resolvedName)
     {
@@ -502,7 +508,8 @@ internal sealed partial class RecordWrites
                                               noFreshRule: WriteSentences.RemoveNoFreshPatch); }
             catch (Exception ex) { return WritePatchBuilder.RemovalOutcome.Fail(ex.Message); }
 
-            return WritePatchBuilder.RemoveRecords(resolver, keys, outPath);
+            var removal = WritePatchBuilder.RemoveRecords(resolver, keys, outPath);
+            return ExtendDeployedNote(removal.Success, outPath) is { } deployed ? removal with { Note = JoinNotes(removal.Note, deployed) } : removal;
         }
     }
 
@@ -621,6 +628,7 @@ internal sealed partial class RecordWrites
 
                 var outcome = WritePatchBuilder.ForwardRecords(resolver, specs, outPath, extend, ForwardSourceParam, fullReadback, dryRun, offOrder);
                 if (!outcome.Success && created) RemoveFolderCreatedThisCall(outPath);   // a refused forward leaves no orphan folder
+                if (ExtendDeployedNote(extend && !dryRun && outcome.Success, outPath) is { } deployed) outcome = outcome with { Note = JoinNotes(outcome.Note, deployed) };
                 return outcome;
             }
             finally { offOverlay?.Dispose(); }

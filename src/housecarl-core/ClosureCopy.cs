@@ -616,6 +616,9 @@ public sealed record ClosureCopyOutcome(
     IReadOnlyList<string> Masters, bool SourceAmongMasters, bool NothingBound,
     long Bytes, string? ReadBackWarning)
 {
+    /// <summary>A side note on a landed copy (the manager's word on whether the game reads an extended patch); null when none.</summary>
+    public string? Note { get; init; }
+
     static readonly IReadOnlyList<CopiedRecord> NoRecords = Array.Empty<CopiedRecord>();
     static readonly IReadOnlyList<StripEntry> NoEntries = Array.Empty<StripEntry>();
     static readonly IReadOnlyList<string> NoStrings = Array.Empty<string>();

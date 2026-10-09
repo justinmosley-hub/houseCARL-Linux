@@ -200,6 +200,29 @@ public sealed class AmethystWriteTests : IDisposable
         Assert.DoesNotContain("sort", scoped);
     }
 
+    [LinuxFact("Amethyst's hardlink deploy is Linux")]
+    public void GrowingAPatchDeployedByHardlinkSaysTheGameStillReadsTheOldFile()
+    {
+        using (var first = _a.Open())
+            Assert.DoesNotContain("the game", SetDamage(first, 50, patch: "HcAwExt"));   // a fresh patch: Amethyst's own steps cover it
+        _a.Deploy(ScratchAmethyst.Link.Hardlink, OwnMods, "houseCARL - HcAwExt");
+        using var svc = _a.Open();
+
+        Assert.Contains("the game does NOT see this edit yet: the file Amethyst deployed at 'HcAwExt.esp' is the one from before it",
+                        SetDamage(svc, 60, into: "HcAwExt"));
+    }
+
+    [LinuxFact("Amethyst's link deploy is Linux; Windows needs admin rights for symlinks")]
+    public void GrowingAPatchDeployedBySymlinkSaysTheGameAlreadyReadsIt()
+    {
+        using (var first = _a.Open()) SetDamage(first, 50, patch: "HcAwExt");
+        _a.Deploy(ScratchAmethyst.Link.Symlink, OwnMods, "houseCARL - HcAwExt");
+        using var svc = _a.Open();
+
+        Assert.Contains("the game already sees this edit: Amethyst deployed 'HcAwExt.esp' as a link to this file.",
+                        SetDamage(svc, 60, into: "HcAwExt"));
+    }
+
     [Fact]
     public void StatusAndSetupSayWhatAmethystDoesDifferently()
     {

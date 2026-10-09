@@ -157,6 +157,7 @@ public static class CopyTools
             sb.Append(WriteSentences.CopySourceOffOrderFolder(off!.Name, off.Folder)).Append('\n');
         sb.Append(WriteSentences.NewOrExtendedArtifact(o.Extended, Path.GetFileName(o.OutPath!), o.Bytes,
             Path.GetFileName(Path.GetDirectoryName(o.OutPath!)!)));
+        if (o.Note is { } note) sb.Append("note: ").Append(note).Append('\n');
 
         if (o.ReadBackWarning is not null) sb.Append(WriteSentences.CopyReadBackUnverified).Append('\n');
         else

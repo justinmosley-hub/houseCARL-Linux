@@ -239,7 +239,7 @@ internal sealed partial class RecordWrites
                     patch => WritePatchBuilder.ExtendRoundTripRefusal(patch, outPath, session));
 
                 wrote = outcome.Success;
-                return outcome;
+                return ExtendDeployedNote(extend && outcome.Success, outPath) is { } deployed ? outcome with { Note = deployed } : outcome;
                 }
                 finally { if (!wrote && created) RemoveFolderCreatedThisCall(outPath); }
             }

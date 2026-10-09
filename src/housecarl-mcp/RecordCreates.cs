@@ -118,7 +118,9 @@ internal sealed partial class RecordWrites
             var outcome = WritePatchBuilder.CreateRecords(resolver, rulebook, specs, outPath, extend, fullReadback);
             if (!outcome.Success && created) RemoveFolderCreatedThisCall(outPath);   // a refused create leaves no orphan folder
             // Post-write verify steps, each a no-op unless the call created that record kind, and none can fail the create.
-            return outcome.Success ? EnrichWithCellShell(EnrichWithScriptCheck(EnrichWithVoiceCheck(outcome, resolver))) : outcome;
+            if (!outcome.Success) return outcome;
+            var enriched = EnrichWithCellShell(EnrichWithScriptCheck(EnrichWithVoiceCheck(outcome, resolver)));
+            return ExtendDeployedNote(extend, outPath) is { } deployed ? enriched with { Note = JoinNotes(enriched.Note, deployed) } : enriched;
         }
     }
 
