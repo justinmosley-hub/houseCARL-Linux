@@ -15,7 +15,7 @@ static class ResolverArchives
     const uint Named = BsaBuilder.HasFolderNames | BsaBuilder.HasFileNames;
 
     static (string, (string, byte[])[]) Entry(string rel, string tag)
-        => (Path.GetDirectoryName(rel)!, new[] { (Path.GetFileName(rel), BsaBuilder.Bytes(tag, 16)) });
+        => (GamePath.DirectoryName(rel), new[] { (GamePath.FileName(rel), BsaBuilder.Bytes(tag, 16)) });
 
     public static byte[] A() => BsaBuilder.Build(105, Named, new[] { Entry(FacegenRel, "A-FACE"), Entry(RankRel, "A-RANK") });
 

@@ -131,5 +131,5 @@ static class NifSourceLaneInstance
     /// <summary>A one-entry uncompressed SE archive carrying <paramref name="rel"/>.</summary>
     public static byte[] Archive(string rel, byte[] bytes) => BsaBuilder.Build(105,
         BsaBuilder.HasFolderNames | BsaBuilder.HasFileNames,
-        new[] { (Path.GetDirectoryName(rel)!, new[] { (Path.GetFileName(rel), bytes) }) });
+        new[] { (GamePath.DirectoryName(rel), new[] { (GamePath.FileName(rel), bytes) }) });
 }

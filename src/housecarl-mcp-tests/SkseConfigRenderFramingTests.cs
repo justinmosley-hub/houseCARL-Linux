@@ -12,7 +12,7 @@ public sealed class SkseConfigRenderFramingTests
         => new(new SkseConfigRef($"0x1|{plugin}", SkseRefShape.FormToken, plugin, 0x1, "0x1", 1, null), v, null);
 
     static SkseConfigFileAudit File(string rel, string group, string provider, params SkseAuditedRef[] refs)
-        => new(rel, Path.GetFileName(rel), group, provider, 1, Array.Empty<SkseProvider>(), refs, null);
+        => new(rel, GamePath.FileName(rel), group, provider, 1, Array.Empty<SkseProvider>(), refs, null);
 
     static string Render(string? filter, params SkseConfigFileAudit[] files)
         => SkseConfigAuditWire.Render(new SkseConfigAuditData(files, files.Length, Array.Empty<string>(), Array.Empty<string>(),

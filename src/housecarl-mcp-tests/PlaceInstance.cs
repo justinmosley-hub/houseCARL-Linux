@@ -24,8 +24,8 @@ public sealed class PlaceInstance : IDisposable
     public static byte[] FaceArchive() => BsaBuilder.Build(105, BsaBuilder.HasFolderNames | BsaBuilder.HasFileNames,
         new[]
         {
-            (Path.GetDirectoryName(FacegenRel)!, new[] { (Path.GetFileName(FacegenRel), ArchiveFaceBytes) }),
-            (Path.GetDirectoryName(FacegenTintRel)!, new[] { (Path.GetFileName(FacegenTintRel), ArchiveTintBytes) }),
+            (GamePath.DirectoryName(FacegenRel), new[] { (GamePath.FileName(FacegenRel), ArchiveFaceBytes) }),
+            (GamePath.DirectoryName(FacegenTintRel), new[] { (GamePath.FileName(FacegenTintRel), ArchiveTintBytes) }),
         });
 
     public string Root { get; }
