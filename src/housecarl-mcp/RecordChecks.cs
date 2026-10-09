@@ -28,13 +28,13 @@ internal sealed class RecordChecks
     /// mid-run failure rides <see cref="DialogueValidationReport.CheckError"/>, a bad input is a named
     /// <see cref="DialogueValidationReport.Error"/>.</summary>
     public DialogueValidationReport ValidateDialogue(FormKey fk)
-        => DialogueValidate.Run(_host.Resolver, _host.Assets, fk, null, ForceLoadedPluginNames(_host.CaptureRoots().ProfileDir));
+        => DialogueValidate.Run(_host.Resolver, _host.Assets, fk, null, ForceLoadedPluginNames(_host.CaptureRoots()));
 
-    /// <summary>The force-loaded plugin names in <paramref name="profileDir"/>, for a check that must not blame a modder
+    /// <summary>The force-loaded plugin names in <paramref name="roots"/>' profile, for a check that must not blame a modder
     /// for content they did not author. Null, never an empty set, when the MO2 profile cannot be read.</summary>
-    static IReadOnlyCollection<string>? ForceLoadedPluginNames(string profileDir)
+    static IReadOnlyCollection<string>? ForceLoadedPluginNames(Mo2Roots roots)
     {
-        var (names, err) = ImplicitPluginNames(profileDir, () => Mo2LoadOrder.ReadComposition(profileDir));
+        var (names, err) = ImplicitPluginNames(roots.ProfileDir, () => Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder));
         return err is null ? names : null;
     }
 
@@ -55,7 +55,7 @@ internal sealed class RecordChecks
             var resolver = pin.Resolver;
             var view = pin.View;
             // The seed door is pinned to that same view, so the seeds cannot name records from another build.
-            var forceLoaded = ForceLoadedPluginNames(roots.ProfileDir);
+            var forceLoaded = ForceLoadedPluginNames(roots);
             // The fold is opened ONCE for the whole sweep and the sweep closes it; a file that will not open is the
             // family's own named refusal.
             DialogueFold? fold = null;
@@ -105,7 +105,7 @@ internal sealed class RecordChecks
         var viewAll = pin.View;
         // The profile's composition, read at most once for the whole call and only by a consumer that needs it.
         var memo = offOrderMemo ?? new SweepOffOrderMemo();
-        var readComposition = memo.CompositionReader(roots.ProfileDir);
+        var readComposition = memo.CompositionReader(roots);
 
         // The exclude= axis. The `implicit` group is a fact about the MO2 composition, so it is read here and the
         // core sweep receives plain filenames, before anything is swept. Gated on the caller having written the
@@ -247,7 +247,7 @@ internal sealed class RecordChecks
         // The exclusion resolves here, where the MO2 composition lives, exactly as it does for CheckErrors.
         bool wantsImplicit = exclude?.Any(v => (v ?? "").Trim().Equals(SweepExclusion.ImplicitToken, StringComparison.OrdinalIgnoreCase)) == true;
         var (implicitNames, implicitErr) = wantsImplicit
-            ? ImplicitPluginNames(captured.Roots.ProfileDir, memo.CompositionReader(captured.Roots.ProfileDir))
+            ? ImplicitPluginNames(captured.Roots.ProfileDir, memo.CompositionReader(captured.Roots))
             : (Array.Empty<string>(), null);
         if (implicitErr is not null) return ScriptCheckResult.Fail(implicitErr);
         var (excluded, excludeErr) = SweepExclusion.Resolve(exclude, implicitNames);
@@ -296,7 +296,7 @@ internal sealed class RecordChecks
 
         bool wantsImplicit = exclude?.Any(v => (v ?? "").Trim().Equals(SweepExclusion.ImplicitToken, StringComparison.OrdinalIgnoreCase)) == true;
         var (implicitNames, implicitErr) = wantsImplicit
-            ? ImplicitPluginNames(roots.ProfileDir, memo.CompositionReader(roots.ProfileDir))
+            ? ImplicitPluginNames(roots.ProfileDir, memo.CompositionReader(roots))
             : (Array.Empty<string>(), null);
         if (implicitErr is not null) return FaceGenCheckResult.Fail(implicitErr);
         var (excluded, excludeErr) = SweepExclusion.Resolve(exclude, implicitNames);

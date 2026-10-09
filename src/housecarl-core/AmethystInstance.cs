@@ -206,6 +206,7 @@ public sealed class AmethystManagerInstance(string gameConfigDir) : IManagerInst
 {
     public string Manager => "Amethyst";
     public string Location { get; } = gameConfigDir;
+    public bool PartialLoadOrder => true;
 
     public ManagerInstancePaths Resolve() => AmethystInstance.Resolve(Location);
     public bool TryResolve(out ManagerInstancePaths? paths) => AmethystInstance.TryResolve(Location, out paths);

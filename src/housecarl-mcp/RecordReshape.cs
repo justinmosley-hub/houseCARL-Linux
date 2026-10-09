@@ -95,7 +95,7 @@ internal sealed partial class RecordWrites
             else
             {
                 // Not in the active order → resolve the file on disk through the shared locate contract; every declared master must still be active.
-                var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir);
+                var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder);
                 var loc = OutputLocations.LocatePluginFileOnDisk(comp, roots, name, null);
                 if (loc.Error is not null)
                     return WritePatchBuilder.CompactOutcome.Fail(

@@ -72,9 +72,12 @@ it until a tool writes there.
 
 ### The profile files
 
-- `loadorder.txt` — every plugin in load order, masters first, **winner last**.
+- `loadorder.txt` — every plugin in load order, masters first, **winner last**. (Amethyst's can be
+  partial and is completed; see [`amethyst-instance.md`](amethyst-instance.md#the-plugin-order-is-the-games-completed-from-what-amethyst-saved).)
 - `modlist.txt` — mod priority, `+`enabled / `-`disabled / `#`comment, `…_separator` entries
-  skipped from both lists.
+  skipped from both lists. A `*` entry (MO2's DLC and unmanaged rows) has no mod folder and is
+  skipped; one that has a folder is Amethyst's locked mod and counts as enabled
+  ([`amethyst-instance.md`](amethyst-instance.md#locked-mods)).
 - `plugins.txt` — the `*` active flag. Listed without a `*` = present but unchecked, and dropped
   from the order. Absent from the file entirely = an implicit force-loaded base/CC master.
 

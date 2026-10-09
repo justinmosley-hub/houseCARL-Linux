@@ -31,6 +31,31 @@ included. The one setup tool (`housecarl_set_mo2_instance`) and the one saved se
 - The profile's `modlist.txt`, `loadorder.txt` and `plugins.txt` are MO2's formats for Skyrim SE (`*` marks an enabled
   plugin, a disabled one is listed bare, base-game plugins are left out of `plugins.txt`).
 
+### The plugin order is the game's, completed from what Amethyst saved
+Amethyst's `loadorder.txt` is its plugin panel's memory, written when the panel saves. A new profile starts with only
+the ten plugins Amethyst pins first, and a newly installed mod's plugin is added to `plugins.txt` alone. On deploy
+Amethyst copies `plugins.txt` into the game's Proton prefix unchanged, so that file is what the game reads. houseCARL
+therefore completes the saved order the way the game loads (`Mo2LoadOrder.CompleteOrder`):
+1. `loadorder.txt` as listed;
+2. every base master (`Skyrim.esm`, `Update.esm`, the three DLC) and every `Skyrim.ccc` entry whose file is in the game's
+   Data folder but not listed, in the game's order, after the last such plugin listed;
+3. every `plugins.txt` entry not listed, in that file's order.
+
+A complete `loadorder.txt` is left as it is. A missing one is not rebuilt: it stays empty and is named, as for MO2.
+Names compare without regard to case; Steam on Linux installs most Creation Club files in lower case while
+`Skyrim.ccc` lists them in mixed case. Amethyst's panel can show unlisted Creation Club plugins sorted by type and
+name; houseCARL follows the game's `Skyrim.ccc` order instead. Plugins Amethyst's panel would recover from a deploy
+(a mod plugin missing from `plugins.txt`) are not loaded by the game until Amethyst writes them back, so houseCARL
+leaves them out too.
+
+The rule is the manager's: `IManagerInstance.PartialLoadOrder` is true for Amethyst and false for MO2, travels with
+the roots (`Mo2Roots.PartialLoadOrder`), and every composition read takes it. MO2's `loadorder.txt` lists everything,
+so MO2 profiles are read exactly as before.
+
+### Locked mods
+A `*Name` line in `modlist.txt` is Amethyst's enabled-and-locked mod, and counts as enabled when that mod folder
+exists. MO2 writes `*` for DLC and unmanaged entries, which have no folder, so they stay out as before.
+
 ### Bad state is refused, never guessed past
 A missing or malformed `paths.json` or profile settings file, a missing profile folder, mods folder, game folder or
 `loadorder.txt` is named, and nothing is derived. Amethyst recording a deploy (`deploy_active`) with no `Data_Core`
@@ -46,13 +71,17 @@ Stamps compare by exact ticks (`FileStamp.Key`), never the second-rounded defaul
 - `AmethystInstanceResolveTests` — every rule above on a synthetic setup: the roots, the active profile and its
   default, profile-specific mods, a profile's game path, Data_Core while deployed, the refusals, the default staging
   root, finding a game from its staging folder, telling the managers apart, and the fingerprint moving.
-- `AmethystLoadOrderTests` — the service end to end with real plugins: the mod's override wins, a deployed patch has
-  one copy (never Data's link), and a deploy, restore and profile switch are picked up without a restart.
+- `AmethystLoadOrderTests` — the service end to end with real plugins: the mod's override wins, a plugin listed only in
+  `plugins.txt` loads, a deployed patch has one copy (never Data's link), and a deploy, restore and profile switch are
+  picked up without a restart.
+- `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
+  files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.
 - `StatusInstanceProfileTests` and the MO2 resolve tests hold that MO2 is unchanged.
 
 ## Where
 `src/housecarl-core/AmethystInstance.cs` (`Resolve`, `TryResolve`, `Validate`, `GameConfigFor`, `StagingRoot`,
-`VanillaDataDir`, `AmethystManagerInstance`); `src/housecarl-core/ManagerInstance.cs` (`ManagerInstancePaths`,
+`VanillaDataDir`, `AmethystManagerInstance`); `Mo2LoadOrder.CompleteOrder` and `ParseModlist` in
+`src/housecarl-core/Mo2LoadOrder.cs`; `src/housecarl-core/ManagerInstance.cs` (`ManagerInstancePaths`,
 `IManagerInstance`, `ManagerInstance.Open`); the service's `_instance` in `src/housecarl-mcp/LoadOrderService.cs`.
 Tool: `housecarl_set_mo2_instance`.
 

@@ -101,6 +101,17 @@ public sealed class AmethystLoadOrderTests : IDisposable
     }
 
     [Fact]
+    public void APluginOnlyInPluginsTxtIsLoadedAsTheGameLoadsIt()
+    {
+        // Amethyst adds a new mod's plugin to plugins.txt; loadorder.txt waits for its plugin panel to save.
+        _a.Profile("HcAmMaster.esm\n", "*HcAmPatch.esp\n", "+PatchMod\n");
+        using var svc = _a.Open();
+
+        Assert.Equal("HcAmPatch.esp", Winner(svc));
+        Assert.Equal(2, svc.StatusData().ResolvedPluginCount);
+    }
+
+    [Fact]
     public void TheSetupToolPointsHouseCarlAtAnAmethystGame()
     {
         using var svc = LoadOrderService.WithInstance(null, 0, new UserConfigStore(Path.Combine(_a.Root, "u.json")));

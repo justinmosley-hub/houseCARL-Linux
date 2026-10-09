@@ -56,7 +56,7 @@ public sealed class MasterSplitInstallLocationsWorld : IDisposable
         File.WriteAllText(Path.Combine(profileDir, "loadorder.txt"), "# header\r\n");
         File.WriteAllText(Path.Combine(profileDir, "plugins.txt"), "");
 
-        Comp = Mo2LoadOrder.ReadComposition(profileDir);
+        Comp = Mo2LoadOrder.ReadComposition(profileDir, ModsDir, DataDir, partialLoadOrder: false);
     }
 
     public void Dispose()

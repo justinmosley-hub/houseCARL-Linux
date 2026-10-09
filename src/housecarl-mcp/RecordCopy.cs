@@ -94,7 +94,7 @@ internal sealed partial class RecordWrites
                 continue;
             }
 
-            comp ??= Mo2LoadOrder.ReadComposition(roots.ProfileDir);
+            comp ??= Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder);
 
             // offerModParam is false: this refusal names a LIST element, whose disambiguator is a full path in that element.
             var loc = OutputLocations.LocatePluginFileOnDisk(comp, roots, spelling, null, offerModParam: false);

@@ -86,7 +86,7 @@ public static class SetupTools
         // Reads the three profile text files only. A read failure here is non-fatal but is named, since this line is what tells the user the setup worked.
         try
         {
-            var comp = Mo2LoadOrder.ReadComposition(p.ProfileDir);
+            var comp = Mo2LoadOrder.ReadComposition(p.ProfileDir, p.ModsDir, p.DataDir, partialLoadOrder: !mo2);
             int active = comp.ActivePluginNames.Count + comp.ImplicitPluginNames.Count;
             sb.Append("sees: ").Append(comp.EnabledMods.Count).Append(" enabled mods · ")
               .Append(comp.OrderedPluginNames.Count).Append(" plugins in the load order (").Append(active).Append(" active)\n");

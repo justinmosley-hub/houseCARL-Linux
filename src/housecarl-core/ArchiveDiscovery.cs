@@ -15,10 +15,10 @@ public static class ArchiveDiscovery
     /// <summary>Discover the active BSAs for the MO2 profile at <paramref name="profileDir"/>.
     /// <paramref name="gamePath"/> is only the game-dir Skyrim.ini fallback; the profile's own is tried first.</summary>
     public static ArchiveDiscoveryResult Discover(
-        string profileDir, string modsDir, string dataDir, string overwriteDir, string gamePath)
+        string profileDir, string modsDir, string dataDir, string overwriteDir, string gamePath, bool partialLoadOrder = false)
     {
         var warnings = new List<string>();
-        var comp = Mo2LoadOrder.ReadComposition(profileDir, warnings);
+        var comp = Mo2LoadOrder.ReadComposition(profileDir, modsDir, dataDir, partialLoadOrder, warnings);
 
         // Active plugins in load order (winner LAST) — the same filter as Mo2LoadOrder.Build.
         var inactive = new HashSet<string>(comp.InactivePluginNames, StringComparer.OrdinalIgnoreCase);

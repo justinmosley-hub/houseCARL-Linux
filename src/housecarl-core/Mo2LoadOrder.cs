@@ -42,12 +42,12 @@ public static class Mo2LoadOrder
     static readonly string[] PluginExts = PluginFile.Extensions;   // the one shared home (HousecarlCore.PluginFile) — no divergent copy
 
     /// <summary>Read the active order from <paramref name="profileDir"/>'s three profile files, resolving each active plugin to its winning real path; the returned paths are in load order, winner last.</summary>
-    public static Mo2OrderResult Build(string profileDir, string modsDir, string dataDir, string overwriteDir = "")
+    public static Mo2OrderResult Build(string profileDir, string modsDir, string dataDir, string overwriteDir = "", bool partialLoadOrder = false)
     {
         var warnings = new List<string>();
 
         // The enabled/disabled COMPOSITION (text files only — cheap). The diagnostic re-reads this same parse fresh.
-        var comp = ParseComposition(profileDir, warnings);
+        var comp = ParseComposition(profileDir, modsDir, dataDir, partialLoadOrder, warnings);
 
         // filename → WINNING real path: overwrite first, then highest-priority enabled mod (first-seen wins), data folder as base.
         var winningPath = BuildFilenameMap(comp.EnabledMods, modsDir, dataDir, overwriteDir);
@@ -76,26 +76,30 @@ public static class Mo2LoadOrder
         return new Mo2OrderResult(orderedPaths, warnings, active);
     }
 
-    /// <summary>Parse the profile's enabled/disabled composition from the three profile text files; the diagnostic re-reads this fresh each call, and <see cref="Build"/> adds the physical-path resolution on top.</summary>
-    public static Mo2Composition ReadComposition(string profileDir, List<string>? warnings = null)
+    /// <summary>Parse the profile's enabled/disabled composition from the three profile text files; the diagnostic re-reads this fresh each call, and <see cref="Build"/> adds the physical-path resolution on top.
+    /// <paramref name="partialLoadOrder"/> (<see cref="IManagerInstance.PartialLoadOrder"/>) completes the order from <paramref name="dataDir"/> and plugins.txt (<see cref="CompleteOrder"/>).</summary>
+    public static Mo2Composition ReadComposition(string profileDir, string modsDir, string dataDir, bool partialLoadOrder, List<string>? warnings = null)
     {
         CompositionRead?.Invoke(profileDir);
-        return ParseComposition(profileDir, warnings);
+        return ParseComposition(profileDir, modsDir, dataDir, partialLoadOrder, warnings);
     }
 
     /// <summary>The parse behind <see cref="ReadComposition"/>, which <see cref="Build"/> calls directly.</summary>
-    static Mo2Composition ParseComposition(string profileDir, List<string>? warnings)
+    static Mo2Composition ParseComposition(string profileDir, string modsDir, string dataDir, bool partialLoadOrder, List<string>? warnings)
     {
         var enabled = new List<string>();
         var disabled = new List<string>();
-        ParseModlist(Path.Combine(profileDir, "modlist.txt"), enabled, disabled, warnings);
+        ParseModlist(Path.Combine(profileDir, "modlist.txt"), modsDir, enabled, disabled, warnings);
 
         var active = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var inactive = new List<string>();
-        ParsePlugins(Path.Combine(profileDir, "plugins.txt"), active, inactive);
+        var listed = new List<string>();
+        ParsePlugins(Path.Combine(profileDir, "plugins.txt"), active, inactive, listed);
         var inactiveSet = new HashSet<string>(inactive, StringComparer.OrdinalIgnoreCase);
 
-        var ordered = ReadLoadOrderNames(Path.Combine(profileDir, "loadorder.txt"), warnings);
+        var loadOrderPath = Path.Combine(profileDir, "loadorder.txt");
+        var ordered = ReadLoadOrderNames(loadOrderPath, warnings);
+        if (partialLoadOrder && File.Exists(loadOrderPath)) CompleteOrder(ordered, listed, dataDir);   // a missing order stays empty, named
         var implicitNames = new List<string>();
         foreach (var name in ordered)
             if (!active.Contains(name) && !inactiveSet.Contains(name))
@@ -104,8 +108,9 @@ public static class Mo2LoadOrder
         return new Mo2Composition(enabled, disabled, ordered, active, inactive, implicitNames);
     }
 
-    /// <summary>modlist.txt to enabled and disabled mod folder names in file order (top = highest priority); a <c>…_separator</c> entry is skipped from both lists.</summary>
-    static void ParseModlist(string modlistPath, List<string> enabled, List<string> disabled, List<string>? warnings)
+    /// <summary>modlist.txt to enabled and disabled mod folder names in file order (top = highest priority); a <c>…_separator</c> entry is skipped from both lists.
+    /// A <c>*</c> entry is enabled when its folder exists: Amethyst's locked mod; MO2's DLC and unmanaged entries have none.</summary>
+    static void ParseModlist(string modlistPath, string modsDir, List<string> enabled, List<string> disabled, List<string>? warnings)
     {
         if (!File.Exists(modlistPath))
         {
@@ -117,9 +122,14 @@ public static class Mo2LoadOrder
             var line = raw.TrimEnd();
             if (line.Length == 0 || line[0] == '#') continue;
             char marker = line[0];
-            if (marker != '+' && marker != '-') continue;           // only +/- lines are mods
+            if (marker != '+' && marker != '-' && marker != '*') continue;   // only +/-/* lines are mods
             var name = line[1..].Trim();
             if (name.Length == 0 || name.EndsWith("_separator", StringComparison.OrdinalIgnoreCase)) continue;
+            if (marker == '*')
+            {
+                if (modsDir.Length > 0 && Directory.Exists(DiskPath.Combine(modsDir, name))) enabled.Add(name);
+                continue;
+            }
             (marker == '+' ? enabled : disabled).Add(name);
         }
     }
@@ -161,17 +171,56 @@ public static class Mo2LoadOrder
         }
     }
 
-    /// <summary>plugins.txt to the active set (the <c>*</c> stripped) and the inactive list; the implicit masters are not listed there at all and are classified in <see cref="ReadComposition"/>.</summary>
-    static void ParsePlugins(string pluginsPath, HashSet<string> active, List<string> inactive)
+    /// <summary>plugins.txt to the active set (the <c>*</c> stripped), the inactive list, and every name in file order; the implicit masters are not listed there at all and are classified in <see cref="ReadComposition"/>.</summary>
+    static void ParsePlugins(string pluginsPath, HashSet<string> active, List<string> inactive, List<string> listed)
     {
         if (!File.Exists(pluginsPath)) return;
         foreach (var raw in ReadProfileLines(pluginsPath))
         {
             var line = raw.Trim();
             if (line.Length == 0 || line[0] == '#') continue;
-            if (line[0] == '*') active.Add(line[1..].Trim());       // checked/active
-            else inactive.Add(line);                                // listed without `*` → unchecked
+            var name = line[0] == '*' ? line[1..].Trim() : line;
+            if (line[0] == '*') active.Add(name);                   // checked/active
+            else inactive.Add(name);                                // listed without `*` → unchecked
+            listed.Add(name);
         }
+    }
+
+    /// <summary>The masters the game loads before reading plugins.txt, in its order, when their files are in Data.</summary>
+    static readonly string[] BaseMasters = { "Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm" };
+
+    /// <summary>Add what the game loads that the saved order leaves out: a base master or Skyrim.ccc plugin present in Data goes
+    /// after the last one listed, in the game's order, and a plugins.txt entry goes at the end in that file's order.
+    /// Amethyst's loadorder.txt lists only what its plugin panel last saved; the game reads plugins.txt.</summary>
+    static void CompleteOrder(List<string> ordered, IReadOnlyList<string> pluginsTxt, string dataDir)
+    {
+        var seen = new HashSet<string>(ordered, StringComparer.OrdinalIgnoreCase);
+        var gameLoaded = GameLoadedPlugins(dataDir);
+        var gameLoadedSet = new HashSet<string>(gameLoaded, StringComparer.OrdinalIgnoreCase);
+        int at = 0;
+        for (int i = 0; i < ordered.Count; i++)
+            if (gameLoadedSet.Contains(ordered[i])) at = i + 1;
+        foreach (var name in gameLoaded)
+            if (seen.Add(name)) ordered.Insert(at++, name);
+        foreach (var name in pluginsTxt)
+            if (seen.Add(name)) ordered.Add(name);
+    }
+
+    /// <summary>The base masters, then the game folder's Skyrim.ccc entries, each kept only when its file is in <paramref name="dataDir"/>.</summary>
+    static List<string> GameLoadedPlugins(string dataDir)
+    {
+        var names = new List<string>();
+        if (string.IsNullOrWhiteSpace(dataDir) || !Directory.Exists(dataDir)) return names;
+        var present = new HashSet<string>(
+            Directory.EnumerateFiles(dataDir, "*", DiskPath.AnyCaseListing).Select(Path.GetFileName)!, StringComparer.OrdinalIgnoreCase);
+        var candidates = new List<string>(BaseMasters);
+        var gameDir = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(dataDir));
+        var ccc = gameDir is null ? null : DiskPath.Combine(gameDir, "Skyrim.ccc");
+        if (ccc is not null && File.Exists(ccc))
+            candidates.AddRange(ReadProfileLines(ccc).Select(l => l.Trim()).Where(l => l.Length > 0 && l[0] != '#'));
+        foreach (var name in candidates)
+            if (present.Contains(name) && !names.Contains(name, StringComparer.OrdinalIgnoreCase)) names.Add(name);
+        return names;
     }
 
     /// <summary>loadorder.txt to plugin filenames in load order, top to bottom being lowest to highest priority; a <c>#</c> header is skipped.</summary>
@@ -205,7 +254,7 @@ public static class Mo2LoadOrder
     /// <summary>Locate every on-disk copy of a plugin filename across the WHOLE install — overwrite, every mod folder enabled, disabled or unlisted, and game Data — returning ALL hits rather than the first; <paramref name="filename"/> is reduced to a bare name.</summary>
     public static IReadOnlyList<PluginFileHit> LocatePlugin(
         string profileDir, string modsDir, string dataDir, string overwriteDir, string filename)
-        => LocatePlugin(ReadComposition(profileDir), modsDir, dataDir, overwriteDir, filename);
+        => LocatePlugin(ReadComposition(profileDir, modsDir, dataDir, partialLoadOrder: false), modsDir, dataDir, overwriteDir, filename);   // mods only; the order is unused
 
     /// <summary>As the profileDir overload, but reusing a <see cref="Mo2Composition"/> the caller already parsed, so a scan pays the modlist parse once.</summary>
     public static IReadOnlyList<PluginFileHit> LocatePlugin(

@@ -176,7 +176,7 @@ internal sealed partial class AssetLayers
         if (peekFilter is { Length: > 0 })
         {
             var compWarnings = new List<string>();
-            activePlugins = PeekPluginSet(Mo2LoadOrder.ReadComposition(profileDir, compWarnings));
+            activePlugins = PeekPluginSet(Mo2LoadOrder.ReadComposition(profileDir, captured.Roots.ModsDir, captured.Roots.DataDir, captured.Roots.PartialLoadOrder, compWarnings));
             if (compWarnings.Count > 0) warnings = [.. warnings, .. compWarnings];
         }
         // Outside the gate: the view is pinned and handle-free, so this cannot race a refresh into wrongness.

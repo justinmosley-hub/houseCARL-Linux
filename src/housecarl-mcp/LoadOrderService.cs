@@ -158,7 +158,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
                 {
                     EnsurePathsDerived();                         // instance mode: derive ProfileDir/ModsDir/DataDir + active profile from ModOrganizer.ini
                     var profileStamps = StatProfileFiles(_profileDir);   // stat BEFORE the read: a profile write during the build is caught next call, not missed
-                    var order = Mo2LoadOrder.Build(_profileDir, _modsDir, _dataDir, _overwriteDir);
+                    var order = Mo2LoadOrder.Build(_profileDir, _modsDir, _dataDir, _overwriteDir, _instance?.PartialLoadOrder == true);
                     _orderWarnings = order.Warnings;
                     var paths = order.OrderedPaths;
                     if (_maxPlugins > 0 && paths.Count > _maxPlugins) paths = paths.Take(_maxPlugins).ToList();
@@ -480,14 +480,14 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     string? ExplainPluginAbsence(string name)
     {
         // Snapshot the roots together under the gate so the four cannot be read across a mid-switch reassignment.
-        string profileDir, modsDir, dataDir, overwriteDir;
-        lock (_gate) { profileDir = _profileDir; modsDir = _modsDir; dataDir = _dataDir; overwriteDir = _overwriteDir; }
+        string profileDir, modsDir, dataDir, overwriteDir; bool partial;
+        lock (_gate) { profileDir = _profileDir; modsDir = _modsDir; dataDir = _dataDir; overwriteDir = _overwriteDir; partial = _instance?.PartialLoadOrder == true; }
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(profileDir)) return null;
         var fn = Path.GetFileName(name.Trim());
         if (fn.Length == 0) return null;
         Interlocked.Increment(ref AbsenceExplanations);
         Mo2Composition comp;
-        try { comp = Mo2LoadOrder.ReadComposition(profileDir); }
+        try { comp = Mo2LoadOrder.ReadComposition(profileDir, modsDir, dataDir, partial); }
         catch { return null; }                       // unreadable profile → say nothing rather than guess
 
         bool ticked = comp.ActivePluginNames.Contains(fn);
@@ -532,9 +532,9 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     /// <summary>Build the asset resolver from the current roots: the active BSAs and the enabled-mod priority list, off one static profile read. Caller holds <see cref="_gate"/>.</summary>
     AssetResolver BuildAssetResolverLocked()
     {
-        var comp = Mo2LoadOrder.ReadComposition(_profileDir);                       // EnabledMods (priority) — cheap text parse
+        var comp = Mo2LoadOrder.ReadComposition(_profileDir, _modsDir, _dataDir, _instance?.PartialLoadOrder == true);  // EnabledMods (priority) — cheap text parse
         var gamePath = _dataDir.Length > 0 ? Path.GetDirectoryName(_dataDir.TrimEnd('\\', '/')) ?? "" : "";
-        var discovery = ArchiveDiscovery.Discover(_profileDir, _modsDir, _dataDir, _overwriteDir, gamePath);
+        var discovery = ArchiveDiscovery.Discover(_profileDir, _modsDir, _dataDir, _overwriteDir, gamePath, _instance?.PartialLoadOrder == true);
         _assetWarnings = discovery.Warnings;
         _activeArchives = discovery.Archives;   // kept alongside the resolver: archive filename → owning plugin (native-pairing provenance)
         _enabledModsAtBuild = comp.EnabledMods; // same build: the mod set behind this resolver (native-pairing loader scan)
@@ -674,19 +674,19 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     public LoadOrderStatusData StatusData()
     {
         // The view and the per-build fields beside it are snapshotted under ONE gate hold, so no status line mixes two builds.
-        LoadOrderResolver.IndexView view; IReadOnlyList<string> warnings; bool profileChanged; string profileDir, modsDir, dataDir, overwriteDir; string profileName; string? instanceDir; string? manager;
+        LoadOrderResolver.IndexView view; IReadOnlyList<string> warnings; bool profileChanged; string profileDir, modsDir, dataDir, overwriteDir; string profileName; string? instanceDir; string? manager; bool partial;
         lock (_gate)
         {
             view = Resolver.Capture();                             // force build/refresh; one build for count + exclusions
             warnings = _orderWarnings;
             profileChanged = ProfileFilesChanged();
             profileDir = _profileDir;
-            modsDir = _modsDir; dataDir = _dataDir; overwriteDir = _overwriteDir;
+            modsDir = _modsDir; dataDir = _dataDir; overwriteDir = _overwriteDir; partial = _instance?.PartialLoadOrder == true;
             profileName = _profileName;                            // captured under the same gate — one snapshot, never re-derived at render
             instanceDir = _instance?.Location;                     // the configured manager folder; null ⇒ explicit-paths / unconfigured mode
             manager = _instance?.Manager;
         }
-        var comp = Mo2LoadOrder.ReadComposition(profileDir);       // fresh composition (always current)
+        var comp = Mo2LoadOrder.ReadComposition(profileDir, modsDir, dataDir, partial);   // fresh composition (always current)
         return new LoadOrderStatusData(
             comp, warnings, view.PluginCount, _maxPlugins, profileChanged, profileDir, modsDir, dataDir, overwriteDir, profileName, instanceDir, view.ExcludedPlugins,
             view.Epoch, view.ContainedRecordCount, manager);
@@ -718,12 +718,12 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     /// <summary>Read MO2's OWN local Nexus update cache — every managed mod's meta.ini Nexus fields — with NO network; only Nexus-linked mods become entries, and a missing mods folder is named.</summary>
     public UpdateCacheData UpdateCache()
     {
-        string modsDir, profileDir; string? instanceDir;
+        string modsDir, profileDir, dataDir; string? instanceDir; bool partial;
         lock (_gate)
         {
             if (!_configured) throw NotConfigured();               // fresh install → the tool surfaces the prompt for the MO2 path
             EnsurePathsDerived();                                  // instance mode: derive _modsDir/_profileDir from the ini (throws if unusable)
-            modsDir = _modsDir; profileDir = _profileDir; instanceDir = _instance?.Location;
+            modsDir = _modsDir; profileDir = _profileDir; dataDir = _dataDir; instanceDir = _instance?.Location; partial = _instance?.PartialLoadOrder == true;
         }
 
         if (string.IsNullOrEmpty(modsDir) || !Directory.Exists(modsDir))
@@ -734,7 +734,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         var disabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (!string.IsNullOrEmpty(profileDir) && Directory.Exists(profileDir))
         {
-            var comp = Mo2LoadOrder.ReadComposition(profileDir);
+            var comp = Mo2LoadOrder.ReadComposition(profileDir, modsDir, dataDir, partial);
             foreach (var e in comp.EnabledMods) enabled.Add(e);
             foreach (var d in comp.DisabledMods) disabled.Add(d);
         }
@@ -765,13 +765,14 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     /// <summary>Inspect a named profile's composition without switching to it, off the cheap text-only <see cref="Mo2LoadOrder.ReadComposition"/>. Instance mode only; an unmatched name is reported with the available ones.</summary>
     public NamedProfileResult NamedProfileComposition(string? requested)
     {
-        string? instanceDir; string profilesRoot;
+        string? instanceDir; string profilesRoot, modsDir, dataDir; bool partial;
         lock (_gate)
         {
             if (!_configured) throw NotConfigured();              // fresh install → the tool returns the prompt for the MO2 path
             EnsurePathsDerived();                                 // instance mode: derive the active ProfileDir (cheap ini read; throws if the instance is unusable)
             instanceDir = _instance?.Location;
             profilesRoot = instanceDir is null ? "" : (Path.GetDirectoryName(_profileDir.TrimEnd('\\', '/')) ?? "");
+            modsDir = _modsDir; dataDir = _dataDir; partial = _instance?.PartialLoadOrder == true;
         }
 
         var name = string.IsNullOrWhiteSpace(requested) ? null : requested.Trim();
@@ -788,7 +789,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
 
         var dir = Path.Combine(profilesRoot, match);
         var warnings = new List<string>();                       // read notes (e.g. a missing modlist.txt), so a 0-mod profile is not mistaken for empty
-        var comp = Mo2LoadOrder.ReadComposition(dir, warnings);  // cheap text parse of THAT profile's loadorder/modlist/plugins — no index build, no switch
+        var comp = Mo2LoadOrder.ReadComposition(dir, modsDir, dataDir, partial, warnings);  // cheap text parse of THAT profile's loadorder/modlist/plugins — no index build, no switch
         return new NamedProfileResult(true, available, match, dir, comp, warnings);
     }
 
@@ -861,7 +862,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         Mo2OrderResult order;
         // A refresh landing in MO2's profile-rewrite window keeps the built snapshot and does not advance the baseline;
         // contract in docs/architecture/load-order-service.md.
-        try { order = Mo2LoadOrder.Build(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.OverwriteDir); }
+        try { order = Mo2LoadOrder.Build(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.OverwriteDir, roots.PartialLoadOrder); }
         catch (ProfileUnreadableException ex) { _profileHeld = ex; return false; }
         _profileHeld = null;                                     // the re-read got through — nothing is pending any more
         var paths = order.OrderedPaths;
@@ -928,7 +929,8 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     OutputRoots ILoadOrderHost.ConfiguredRoots() => ConfiguredRoots();
 
     /// <summary>The four roots as they stand; caller holds <see cref="_gate"/>.</summary>
-    Mo2Roots RootsLocked() => new(ProfileDir: _profileDir, DataDir: _dataDir, ModsDir: _modsDir, OverwriteDir: _overwriteDir);
+    Mo2Roots RootsLocked() => new(ProfileDir: _profileDir, DataDir: _dataDir, ModsDir: _modsDir, OverwriteDir: _overwriteDir,
+                                  PartialLoadOrder: _instance?.PartialLoadOrder == true);
 
     static bool PathEq(string a, string b) =>
         string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);

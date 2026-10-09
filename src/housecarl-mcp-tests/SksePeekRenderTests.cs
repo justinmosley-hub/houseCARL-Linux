@@ -114,7 +114,7 @@ public sealed class SksePeekRenderTests
             Directory.CreateDirectory(prof);
             File.WriteAllText(Path.Combine(prof, "modlist.txt"), "+SomeMod\n");   // readable; no plugins.txt or loadorder.txt
             var warn = new List<string>();
-            var comp = Mo2LoadOrder.ReadComposition(prof, warn);
+            var comp = Mo2LoadOrder.ReadComposition(prof, "", "", false, warn);
             Assert.Empty(comp.ActivePluginNames);
             Assert.Empty(comp.ImplicitPluginNames);
             Assert.NotEmpty(warn);

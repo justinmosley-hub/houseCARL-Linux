@@ -542,7 +542,7 @@ internal sealed partial class RecordReads
         if (!namesMod && activeFilename)
             return (new PoleInfo(plugin, "active in the load order", InOrder: true, EpochCoversPole: true), null);
 
-        var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir);
+        var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder);
         var loc = OutputLocations.LocatePluginFileOnDisk(comp, roots, plugin, mod);
         if (loc.Error is not null)
             // A pole found in neither place names both places searched; when the filename IS active, the named

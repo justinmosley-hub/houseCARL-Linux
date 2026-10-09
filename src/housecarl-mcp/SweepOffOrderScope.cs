@@ -26,7 +26,7 @@ internal static class SweepOffOrderScope
             return memo.Refusal;
         }
 
-        var answer = Compute(view, plugins, roots, out active, out offOrder, memo.CompositionReader(roots.ProfileDir));
+        var answer = Compute(view, plugins, roots, out active, out offOrder, memo.CompositionReader(roots));
         memo.Epoch = view.Epoch;
         memo.Roots = roots;
         memo.Plugins = plugins;
@@ -82,14 +82,14 @@ public sealed class SweepOffOrderMemo
     string? _compositionProfile;
     Lazy<Mo2Composition>? _composition;
 
-    /// <summary>A reader for <paramref name="profileDir"/>'s composition that parses it at most once for this call,
+    /// <summary>A reader for the composition of <paramref name="roots"/>' profile that parses it at most once for this call,
     /// and only when first invoked; a different folder is read afresh. A failed read fails the same way each time.</summary>
-    internal Func<Mo2Composition> CompositionReader(string profileDir)
+    internal Func<Mo2Composition> CompositionReader(Mo2Roots roots)
     {
-        if (_composition is null || !string.Equals(_compositionProfile, profileDir, StringComparison.Ordinal))
+        if (_composition is null || !string.Equals(_compositionProfile, roots.ProfileDir, StringComparison.Ordinal))
         {
-            _compositionProfile = profileDir;
-            _composition = new Lazy<Mo2Composition>(() => Mo2LoadOrder.ReadComposition(profileDir), LazyThreadSafetyMode.None);
+            _compositionProfile = roots.ProfileDir;
+            _composition = new Lazy<Mo2Composition>(() => Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder), LazyThreadSafetyMode.None);
         }
         var composition = _composition;
         return () => composition.Value;

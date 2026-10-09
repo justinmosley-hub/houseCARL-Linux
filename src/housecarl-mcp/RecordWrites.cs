@@ -137,7 +137,7 @@ internal sealed partial class RecordWrites
         {
             // The shared predicate the engine consumes through, not a restatement of it.
             if (!WritePatchBuilder.IsOffOrderCopySource(e, view)) continue;   // not a CopyFrom, or active — Apply resolves it off the shared build
-            comp ??= Mo2LoadOrder.ReadComposition(roots.ProfileDir);
+            comp ??= Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder);
             var loc = OutputLocations.LocatePluginFileOnDisk(comp, roots, e.FromPlugin!, null);
             if (loc.Error is not null) { problems.Add($"{FormIdToken.Of(e.Target)}: CopyFrom source '{e.FromPlugin}' is not in the load order and {loc.Error}"); continue; }
             if (loc.Ambiguous is not null) { problems.Add($"{FormIdToken.Of(e.Target)}: CopyFrom source '{e.FromPlugin}' matches several mod folders on disk — pass an exact path to disambiguate."); continue; }
@@ -196,7 +196,7 @@ internal sealed partial class RecordWrites
             return null;
         }
 
-        var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir);
+        var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder);
         // offerModParam is false: this tool has no mod= parameter, and a direct path is this lane's disambiguator.
         var loc = OutputLocations.LocatePluginFileOnDisk(comp, roots, fromPlugin, null, offerModParam: false);
         if (loc.Error is not null)

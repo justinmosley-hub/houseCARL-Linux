@@ -267,7 +267,7 @@ internal sealed class OutputLocations
                 // One capture for the locate, the owned-folder check and the folder resolve; unconfigured fails with the prompt.
                 snapshot = _host.ConfiguredRoots();
                 roots = snapshot.Roots;
-                var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir);   // cheap text parse — no index build
+                var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder);   // cheap text parse — no index build
                 var loc = LocatePluginFileOnDisk(comp, roots, plugin, null, offerModParam: false);
                 // The locate refusal names what it could not find; this adds what THIS tool accepts.
                 if (loc.Error is not null)
@@ -442,7 +442,7 @@ internal sealed class OutputLocations
     {
         try
         {
-            var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir);
+            var comp = Mo2LoadOrder.ReadComposition(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.PartialLoadOrder);
             // No mod named in either list is an unusable profile.
             return comp.EnabledMods.Count == 0 && comp.DisabledMods.Count == 0 ? null : comp;
         }
@@ -468,7 +468,7 @@ internal sealed class OutputLocations
         {
             var names = builtNames;
             if (names is null)
-                names = Mo2LoadOrder.Build(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.OverwriteDir)
+                names = Mo2LoadOrder.Build(roots.ProfileDir, roots.ModsDir, roots.DataDir, roots.OverwriteDir, roots.PartialLoadOrder)
                     .OrderedPaths.Select(Path.GetFileName).Where(n => !string.IsNullOrEmpty(n)).ToList()!;
             foreach (var n in names) set.Add(n);
         }

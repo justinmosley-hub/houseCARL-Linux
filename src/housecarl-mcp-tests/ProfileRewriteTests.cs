@@ -198,7 +198,7 @@ public sealed class ProfileRewriteTests
         using var w = new RewriteWorld();
         File.Delete(w.LoadOrderPath);
 
-        var comp = Mo2LoadOrder.ReadComposition(w.ProfileDir, new List<string>());
+        var comp = Mo2LoadOrder.ReadComposition(w.ProfileDir, "", "", false, new List<string>());
 
         Assert.Empty(comp.OrderedPluginNames);
     }
@@ -211,7 +211,7 @@ public sealed class ProfileRewriteTests
         using var w = new RewriteWorld();
         using var hold = HeldOpen.Hold(w.LoadOrderPath);
 
-        var ex = Assert.Throws<ProfileUnreadableException>(() => Mo2LoadOrder.ReadComposition(w.ProfileDir));
+        var ex = Assert.Throws<ProfileUnreadableException>(() => Mo2LoadOrder.ReadComposition(w.ProfileDir, "", "", false));
 
         Assert.Equal(w.LoadOrderPath, ex.ProfilePath);
     }

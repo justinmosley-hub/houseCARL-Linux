@@ -17,6 +17,11 @@ public interface IManagerInstance
     /// <summary>The folder this instance was configured with.</summary>
     string Location { get; }
 
+    /// <summary>True when the profile's loadorder.txt can leave out plugins the game loads, so the order is completed
+    /// from Data and plugins.txt (<see cref="Mo2LoadOrder.ReadComposition"/>): Amethyst's lists only what its plugin
+    /// panel last saved; MO2's lists everything.</summary>
+    bool PartialLoadOrder { get; }
+
     /// <summary>Derive the roots, or THROW naming every missing piece; never half-derived paths.</summary>
     ManagerInstancePaths Resolve();
 
