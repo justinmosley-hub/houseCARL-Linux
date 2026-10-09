@@ -1,5 +1,5 @@
 ---
-updated: 2026-09-24
+updated: 2026-10-09
 covers: [src/housecarl-core/SkyPatcherParse.cs, src/housecarl-core/SkyPatcherCatalog.cs, src/housecarl-core/SkyPatcherFieldMap.cs, src/housecarl-core/SkyPatcherDiscovery.cs, src/housecarl-core/SkyPatcherOverlay.cs, src/housecarl-core/SkyPatcherConflicts.cs, src/housecarl-core/SkyPatcherDraft.cs, src/housecarl-mcp/SkyPatcherTools.cs, src/housecarl-mcp/SkyPatcherReplay.cs]
 ---
 # The SkyPatcher layer
@@ -128,6 +128,19 @@ filter=<INI> lists them`; in json the same lines join the `skypatcher_warnings` 
 lint lives under that line in `housecarl_skypatcher_layer filter=`: unknown keys and the filter form
 tokens that resolve to nothing, resolved once per line, in the words a read uses.
 
+**On a records scan.** `housecarl_records` with the post-state overlay over a scan replays only the rows its
+`limit=` window keeps. The scan selects off the plugin records, so `types=`, `plugins=`, `where=` and `references=`
+judge each record before the layer replays; when `where=` or `references=` is present the scan's note says so, naming
+them (`scan_note` on json and dense, a header line on text). The
+window's keys go through `OverlayPostBatch`, the list lane's batch, which opens one replay context for the call; an
+empty window opens none. A `summary` window is bounded by the render bound as the fields form is, and keeps the scan's
+`matches=` un-merge. `aggregate` and `counts_only` are not replayed: they count the plugin records, and the scan's
+note says that. A walk or `to_file=` with the post state on a scan is refused, because each covers every match or
+every record reached (a walk would replay its whole reached set, not the window), as is `fields_source='winner'`, a
+second display pole. The pre state on a scan is the winner scan, said in its source statement, so it serves a walk
+and `to_file=`. A comparison form over a scan takes neither state: the post refusal names the replay, the pre one
+says pre is the winner and to pass `"winner"`.
+
 ### Reports and drafts
 
 `SkyPatcherConflicts` is report-only: it names same-field, same-target SET collisions across files
@@ -179,6 +192,11 @@ hardened.
   always rides, a draft's line rides whatever its verdict, and `filter=` lists the lint under its line.
 - *How the overlay replays onto a record*: `SkyPatcherFieldMapGuardTests.AMappedHardOpIsCaught` — CI rejects a
   HARD op that acquires a mapping.
+- *How the overlay replays onto a record*, on a records scan: `RecordsScanPoleTests` — a draft's post state read
+  over a scan in text, json and dense; `limit=1` opens one replay context and reads one body; `where=` drops a record
+  its winner fails though the draft would pass it, and says so, as `references=` does; a count opens no replay and
+  carries the note, as does an empty window; a walk, `to_file=` and `fields_source='winner'` with the post state are
+  refused and served with pre; a summary keeps `matches=` and is bounded.
 - *Reports and drafts*: `SkyPatcherConflictsTests` — SET collisions with the later
   file winning, accumulating ops not conflicts, and the ITM classes.
 - *Reports and drafts*: `RecordsSkyPatcherDraftTests.ADraftThatSetsALeafIsReadInThePostState` — a draft is folded into
