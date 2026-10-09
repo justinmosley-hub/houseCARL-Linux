@@ -190,6 +190,14 @@ public sealed class AmethystWriteTests : IDisposable
         var read = ManagerWording.For(svc.Manager, RecordsTools.Records(svc, formids: new[] { _weapon }, source: Doc("\"HcAwWords.esp\"")));
         Assert.Contains("NOT active — Amethyst has not listed that mod folder yet — refresh Amethyst, enable the mod, then Deploy", read);
         Assert.DoesNotContain("MO2", read);
+
+        // The same patch named in plugins=: an error whose remedy is worded apart from the read's own (found by an
+        // independent test session).
+        var scoped = ManagerWording.For(svc.Manager, RecordsTools.Records(svc, plugins: new RecordsTools.RecordsScope { names = new[] { "HcAwWords.esp" } },
+                                                                         source: Doc("\"HcAwWords.esp\"")));
+        Assert.Contains("Amethyst has not listed that folder yet — refresh Amethyst, enable the mod, then Deploy", scoped);
+        Assert.DoesNotContain("MO2", scoped);
+        Assert.DoesNotContain("sort", scoped);
     }
 
     [Fact]

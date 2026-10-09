@@ -21,14 +21,28 @@ internal static class ManagerWording
         ("then enable it in MO2 (MO2 adds a newly activated plugin at the END of the load order)",
          "then refresh Amethyst, enable it and Deploy (Amethyst adds a newly enabled plugin at the END of the load order)"),
         ("enable it in MO2", "refresh Amethyst, enable it and Deploy"),
-        // Why a plugin is not loaded, and the remedy.
+        // Why a plugin is not loaded, and the remedy. Enabling a mod in Amethyst ticks its plugins and puts them last.
         ("MO2 has not registered that mod folder — refresh MO2, then tick the plugin and sort",
          "Amethyst has not listed that mod folder yet — refresh Amethyst, enable the mod, then Deploy"),
+        ("MO2 has not registered that folder yet — refresh MO2, then tick the plugin and sort",
+         "Amethyst has not listed that folder yet — refresh Amethyst, enable the mod, then Deploy"),
         ("which MO2 has not registered — refresh MO2, then tick the plugin and sort",
          "which Amethyst has not listed yet — refresh Amethyst, enable the mod, then Deploy"),
+        ("Switch that mod on in MO2, then tick the plugin and sort", "Switch that mod on in Amethyst, then Deploy"),
         ("switched OFF in MO2 — switch it on, then re-sort", "switched OFF in Amethyst — switch it on, then Deploy"),
+        ("Tick it in MO2 and re-sort", "Tick it in Amethyst's Plugins tab and Deploy"),
         ("(MO2's right pane)", "(Amethyst's Plugins tab)"),
+        ("PLUGINS (right pane)", "PLUGINS (Amethyst's Plugins tab)"),
         ("is not registered in MO2's load order (refresh MO2 to pick it up)", "is not in Amethyst's load order (refresh Amethyst to pick it up)"),
+        ("a mod folder MO2 has NOT registered — nothing in MO2's list to switch on; refresh MO2 to pick it up",
+         "a mod folder Amethyst has NOT listed — nothing in Amethyst's list to switch on; refresh Amethyst to pick it up"),
+        ("but MO2's load order does not list it", "but Amethyst's load order does not list it"),
+        ("a folder MO2 has not seen registers at the highest priority", "a folder Amethyst has not seen is listed at the highest priority"),
+        // A stale profile, and a winner a removal may change.
+        ("(trigger an MO2 refresh / re-sort so it rewrites the profile files)", "(refresh Amethyst so it rewrites the profile files)"),
+        ("that MO2 has written loadorder.txt/modlist.txt (a refresh/re-sort in MO2)",
+         "that Amethyst has written loadorder.txt/modlist.txt (open the profile in Amethyst once)"),
+        ("re-sort in MO2 if dropping this override changes a conflict winner", "re-sort in Amethyst if dropping this override changes a conflict winner"),
     };
 
     /// <summary><paramref name="text"/> in <paramref name="manager"/>'s words: unchanged unless the manager is Amethyst. A

@@ -129,8 +129,10 @@ new mod appears, and that a Deploy is needed. MO2's note is null.
 The phrases that tell the user what to DO are swapped, because a session acts on them: the advice after a new patch
 ("enable it in MO2 to use the patch; MO2 adds a newly activated plugin…"), why a plugin is not loaded and its remedy
 ("MO2 has not registered that mod folder — refresh MO2, then tick the plugin and sort"; for Amethyst a refresh, enabling
-the mod and a Deploy, since enabling ticks the plugin and puts it last), and the two places the standing instructions
-name MO2. They live in ONE table, `ManagerWording.AmethystPhrases`, most specific first, applied by
+the mod and a Deploy, since enabling ticks the plugin and puts it last), every other remedy that sends the user to do
+something in MO2 (switch a mod on, tick a plugin, refresh, re-sort, the "right pane", a stale profile), and the two
+places the standing instructions name MO2. The set came from searching the source for each remedy, after an independent
+test session found a variant the first table missed ("that folder" where the read said "that mod folder"). They live in ONE table, `ManagerWording.AmethystPhrases`, most specific first, applied by
 `ManagerWording.For`:
 - to every tool answer, by a call-tool filter (`ManagerWording.AnswerWords`, registered beside upstream's
   `ToolCallShim.LenientArguments`), which reads the manager when the answer is made, so a manager set mid-session counts;
