@@ -24,8 +24,8 @@ public sealed class CompileGameDirHintTests : IDisposable
     [Fact]
     public void ExplicitModeGivesTheDataDirsParent()
     {
-        var svc = LoadOrderService.WithExplicitPaths(@"C:\Game\Skyrim Special Edition\Data", @"C:\Mods", @"C:\Profile", 0, Store());
-        Assert.Equal(@"C:\Game\Skyrim Special Edition", svc.GameDirOrNull());
+        var svc = LoadOrderService.WithExplicitPaths(HarnessPaths.Rooted(@"C:\Game\Skyrim Special Edition\Data"), HarnessPaths.Rooted(@"C:\Mods"), HarnessPaths.Rooted(@"C:\Profile"), 0, Store());
+        Assert.Equal(HarnessPaths.Rooted(@"C:\Game\Skyrim Special Edition"), svc.GameDirOrNull());
     }
 
     // Probe A: "unconfigured: GameDirOrNull returns null (never throws)".
@@ -47,8 +47,8 @@ public sealed class CompileGameDirHintTests : IDisposable
     [Fact]
     public void TheHintsLeadWithTheLoadOrderGameDir()
     {
-        var svc = LoadOrderService.WithExplicitPaths(@"C:\Game\Skyrim Special Edition\Data", @"C:\Mods", @"C:\Profile", 0, Store());
-        Assert.Equal(@"C:\Game\Skyrim Special Edition", svc.CompilerGameDirHints()[0]);
+        var svc = LoadOrderService.WithExplicitPaths(HarnessPaths.Rooted(@"C:\Game\Skyrim Special Edition\Data"), HarnessPaths.Rooted(@"C:\Mods"), HarnessPaths.Rooted(@"C:\Profile"), 0, Store());
+        Assert.Equal(HarnessPaths.Rooted(@"C:\Game\Skyrim Special Edition"), svc.CompilerGameDirHints()[0]);
     }
 
     // Probe A: "CompilerGameDirHints on an unconfigured service returns a list (no load-order hint; locator-only), never throws".

@@ -60,4 +60,12 @@ public sealed class DiskPathTests : IDisposable
         Assert.Equal(Path.Combine(_root, "Meshes"), DiskPath.Combine(_root, "Meshes"));
         Assert.Equal(Path.Combine(_root, "meshes"), DiskPath.Combine(_root, "meshes"));
     }
+
+    [Fact]
+    public void ALeadingSlashGamePathIsNotADiskPathButARealAbsolutePathIs()
+    {
+        Assert.False(PathArguments.NamesDiskPath("meshes/armor/x.nif"));
+        Assert.True(PathArguments.NamesDiskPath(Path.Combine(Path.GetTempPath(), "x.nif")));
+        if (!OperatingSystem.IsWindows()) Assert.False(PathArguments.NamesDiskPath("/meshes/armor/x.nif"));
+    }
 }

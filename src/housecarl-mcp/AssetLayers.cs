@@ -1196,7 +1196,7 @@ internal sealed partial class AssetLayers
     static bool IsVfsSource(string source)
     {
         if (source.IndexOf('|') >= 0) return false;                      // '<archive.bsa>|<entry>' — an entry, not a path
-        if (!Path.IsPathFullyQualified(source)) return true;             // Data-relative ⇒ the VFS answers, whatever it ends in
+        if (!PathArguments.NamesDiskPath(source)) return true;           // Data-relative ⇒ the VFS answers, whatever it ends in
         return false;                                                    // a volume or UNC path ⇒ one exact file (or archive) on disk
     }
 

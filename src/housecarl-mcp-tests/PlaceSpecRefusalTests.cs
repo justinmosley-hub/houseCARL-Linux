@@ -31,6 +31,9 @@ public sealed class PlaceSpecWorld : IDisposable
 [Trait("tier", "integration")]
 public sealed class PlaceSpecRefusalTests : IClassFixture<PlaceSpecWorld>
 {
+    /// <summary>An absolute path to a file that is not there, on any OS: an on-disk source that does not exist.</summary>
+    static readonly string NoSuchDiskFile = Path.Combine(Path.GetTempPath(), "hc-no-such-folder", "fan.nif");
+
     readonly PlaceSpecWorld _w;
     public PlaceSpecRefusalTests(PlaceSpecWorld w) => _w = w;
 
@@ -86,7 +89,7 @@ public sealed class PlaceSpecRefusalTests : IClassFixture<PlaceSpecWorld>
     public void ASetLevelPoleIsWithheldFromAnOnDiskSourceAndTheRowSaysSo()
     {
         var fan = PlaceTools.Place(_w.Svc,
-            new[] { new PlaceTarget { Path = @"meshes\hcprobe\fan.nif", Source = @"C:\nope\fan.nif" } }, source_provider: "SomeMod");
+            new[] { new PlaceTarget { Path = @"meshes\hcprobe\fan.nif", Source = NoSuchDiskFile } }, source_provider: "SomeMod");
 
         Assert.DoesNotContain(WriteSentences.PlaceSourceProviderNeedsRelPath, fan);
         Assert.Contains("set-level source_provider not applied", fan);
@@ -97,7 +100,7 @@ public sealed class PlaceSpecRefusalTests : IClassFixture<PlaceSpecWorld>
     public void AMembersOwnPoleOnAnOnDiskSourceIsRefused()
     {
         var own = PlaceTools.Place(_w.Svc, new[]
-            { new PlaceTarget { Path = @"meshes\hcprobe\fan.nif", Source = @"C:\nope\fan.nif", SourceProvider = "SomeMod" } });
+            { new PlaceTarget { Path = @"meshes\hcprobe\fan.nif", Source = NoSuchDiskFile, SourceProvider = "SomeMod" } });
 
         Assert.Contains(WriteSentences.PlaceSourceProviderNeedsRelPath, own);
     }
@@ -107,7 +110,7 @@ public sealed class PlaceSpecRefusalTests : IClassFixture<PlaceSpecWorld>
     public void AForwardSlashDestinationStillSaysThePoleWasWithheld()
     {
         var slash = PlaceTools.Place(_w.Svc,
-            new[] { new PlaceTarget { Path = "meshes/hcprobe/fan.nif", Source = @"C:\nope\fan.nif" } }, source_provider: "SomeMod");
+            new[] { new PlaceTarget { Path = "meshes/hcprobe/fan.nif", Source = NoSuchDiskFile } }, source_provider: "SomeMod");
 
         Assert.Contains("set-level source_provider not applied", slash);
     }

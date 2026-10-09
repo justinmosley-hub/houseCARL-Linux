@@ -169,7 +169,7 @@ public static class PlaceTools
         bool srcOkForBoth = srcProbe is null
             || (srcProbe.EndsWith(".bsa", StringComparison.OrdinalIgnoreCase)
                 && srcProbe.IndexOf('|') < 0
-                && Path.IsPathFullyQualified(srcProbe));
+                && PathArguments.NamesDiskPath(srcProbe));
         if (!srcOkForBoth)
         {
             error = $"{where}with formid and no kind (placing BOTH mesh and tint), an explicit source= must be a FULL '.bsa' path — each slot's entry is then derived. Any single file path names ONE file and cannot serve both slots, so for a loose file, a BSA entry, or a Data-relative path set kind= mesh or tint. {WriteSentences.PlaceBothSlotsPoleConstraint}.";

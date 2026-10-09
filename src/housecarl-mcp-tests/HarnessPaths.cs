@@ -17,9 +17,9 @@ static class HarnessPaths
                                                            "net9.0", OperatingSystem.IsWindows() ? "housecarl-mcp.exe" : "housecarl-mcp");
 
     /// <summary>A Windows absolute path written in a test (<c>E:\mo2\mods</c>), as an absolute path on this OS: unchanged
-    /// on Windows, <c>/E/mo2/mods</c> elsewhere. For tests that need a fully qualified path, not a real file.</summary>
+    /// on Windows, <c>/E/mo2/mods</c> elsewhere, a trailing separator kept. For tests that need a fully qualified path, not a real file.</summary>
     public static string Rooted(string windowsPath) =>
-        OperatingSystem.IsWindows() ? windowsPath : "/" + windowsPath.Replace(":", "").Replace('\\', '/').TrimEnd('/');
+        OperatingSystem.IsWindows() ? windowsPath : "/" + windowsPath.Replace(":", "").Replace('\\', '/');
 
     static string FindRepoRoot()
     {

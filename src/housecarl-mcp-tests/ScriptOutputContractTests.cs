@@ -13,14 +13,15 @@ public sealed class ScriptOutputContractTests
     const string Mods = @"C:\MO2\mods", Data = @"C:\Game\Skyrim Special Edition\Data", Over = @"C:\MO2\overwrite";
 
     static (string scriptsDir, bool appendedScripts, string? deployWarning) Contract(string outDir, string overwrite = "")
-        => OutputLocations.ScriptOutputContract(outDir, Mods, Data, overwrite);
+        => OutputLocations.ScriptOutputContract(HarnessPaths.Rooted(outDir), HarnessPaths.Rooted(Mods), HarnessPaths.Rooted(Data),
+                                         overwrite.Length == 0 ? "" : HarnessPaths.Rooted(overwrite));
 
     // Probe B1: "a bare mod-folder root gets Scripts\ appended".
     [Fact]
     public void ABareRootGetsScriptsAppended()
     {
         var c = Contract(@"C:\MyMod");
-        Assert.Equal(@"C:\MyMod\Scripts", c.scriptsDir);
+        Assert.Equal(HarnessPaths.Rooted(@"C:\MyMod\Scripts"), c.scriptsDir);
         Assert.True(c.appendedScripts);
     }
 
@@ -33,7 +34,7 @@ public sealed class ScriptOutputContractTests
     public void ARootAlreadyEndingInScriptsIsNotDoubled(string given, string want)
     {
         var c = Contract(given);
-        Assert.Equal(want, c.scriptsDir);
+        Assert.Equal(HarnessPaths.Rooted(want), c.scriptsDir);
         Assert.False(c.appendedScripts);
     }
 
@@ -71,6 +72,6 @@ public sealed class ScriptOutputContractTests
     [Fact]
     public void ADriveRootKeepsItsSeparator()
     {
-        Assert.Equal(@"C:\Scripts", Contract(@"C:\").scriptsDir);
+        Assert.Equal(HarnessPaths.Rooted(@"C:\Scripts"), Contract(@"C:\").scriptsDir);
     }
 }

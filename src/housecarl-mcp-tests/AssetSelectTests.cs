@@ -533,11 +533,11 @@ public sealed class AssetSelectTests : IClassFixture<AssetSelectWorld>
     public void CountsOnlyBesideToFileIsRefusedByName()
     {
         var text = AssetTools.AssetStatus(_w.Svc, under: new[] { AssetSelectWorld.FaceGeomDir },
-                                          counts_only: true, to_file: @"C:\work\never.jsonl");
+                                          counts_only: true, to_file: HarnessPaths.Rooted(@"C:\work\never.jsonl"));
 
         Assert.Contains("counts_only", text);
         Assert.Contains("the two contradict", text);
-        Assert.False(File.Exists(@"C:\work\never.jsonl"));
+        Assert.False(File.Exists(HarnessPaths.Rooted(@"C:\work\never.jsonl")));
     }
 
     /// <summary>The mod table is bounded by max_chars with the same named cut the path list takes, and the counters
