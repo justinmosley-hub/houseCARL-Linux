@@ -5,9 +5,9 @@ This fork runs houseCARL on Linux and reads a load order from
 written for someone who knows houseCARL, C# and Windows, and has not used Linux or Amethyst. Nothing
 here changes how houseCARL behaves on Windows.
 
-Status: the server builds and the test suite runs on Linux; game-path handling is done, and every render now keeps
-to `max_chars`. About 117 Windows-only tests are still to be made per-OS. The Amethyst backend, writes into
-Amethyst, and Papyrus compile through Wine are next, in that order.
+Status: the server builds and the whole test suite passes on Linux (6,570 passed, 0 failed, 11 skipped with a
+reason). Game paths, casing and file locks are handled, and every render keeps to `max_chars`. The Amethyst backend,
+writes into Amethyst, and Papyrus compile through Wine are next, in that order.
 
 ## What changed, and where
 
@@ -78,8 +78,20 @@ A test that cannot run on one OS is marked so it reports as **skipped**, never a
 lacks")]` for Windows-only behaviour, `[CaseSensitiveDiskFact]` for one that needs a case-sensitive disk. Never `return`
 early from a test body: that reports a pass for a test that did not run.
 
-Not done yet: about 150 tests still assume Windows (`C:\` paths, ACL denial, `where.exe`, the Windows
-installer). Each is being made per-OS, or skipped on Linux with a reason where Linux cannot reproduce it.
+How the suite runs on Linux, for someone who wrote it on Windows:
+
+| On Windows the test… | On Linux it… | Where |
+|---|---|---|
+| denies a folder with an ACL | sets the folder's mode bits (`000` for everything, `-wx` for listing only) | `DenyAce` |
+| holds a file open so it cannot be replaced or deleted | also makes the file's folder unwritable, since an open file can be replaced on Linux | `HeldOpen.HoldAgainstReplace` |
+| expects ERROR_SHARING_VIOLATION (32) for a file another process holds | gets EWOULDBLOCK (11); both mean "in use, retry" | `FileInUse` (core) |
+| writes `C:\...` for an absolute path | uses `/C/...` | `HarnessPaths.Rooted` |
+| copies `where.exe` as a failing BSArch | uses a shell script that exits 2 | `BsaPackContractTests` |
+| reads `System32\kernel32.dll` | reads Wine's `kernel32.dll`, a real PE; skipped without Wine | `[NativeDllFact]` |
+
+Skipped on Linux, each with its reason: the five Papyrus compile tests (no `PapyrusCompiler.exe`, as on Windows CI),
+three that carry a creation time across a replace, a memory-mapped file blocking a replace, the Windows installer's
+held-DLL check, and upstream's own held-file dispose check.
 
 ## When a Linux user reports…
 

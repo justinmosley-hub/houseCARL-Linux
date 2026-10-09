@@ -372,7 +372,9 @@ public sealed class AssetLooseFreshnessTests : IDisposable
     public void ATrailingDotOrSpaceResolvesAsAFileOpenDoes(string query, bool opens)
     {
         using var r = Build();
-        Assert.Equal(opens, File.Exists(Path.Combine(_mods, Provider, query)));
+        // Only Windows' own file system applies its rule; on Linux the game opens files through Wine/Proton, which keeps
+        // the Windows rule, so the resolver keeps it on every OS.
+        if (OperatingSystem.IsWindows()) Assert.Equal(opens, File.Exists(Path.Combine(_mods, Provider, query)));
         Assert.Equal(opens ? Provider : null, Winner(r, query));
     }
 

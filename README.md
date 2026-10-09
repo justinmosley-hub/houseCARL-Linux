@@ -13,8 +13,10 @@
 >   SkyPatcher names, and JSON responses that now match on Windows and Linux.
 > - Every text and JSON response now keeps to its `max_chars` limit (upstream #1016 and more).
 >
+> - The full test suite passes on Linux: 6,570 passed, 0 failed, 11 skipped with a stated reason.
+>
 > Not done yet: reading an Amethyst setup (next), writing into Amethyst, Papyrus compile through Wine, and a Linux
-> release package. About 117 tests that only make sense on Windows still fail on Linux and are being made per-OS.
+> release package.
 >
 > What changed and why, written for anyone who knows houseCARL and Windows but not Linux:
 > [docs/linux-and-amethyst.md](docs/linux-and-amethyst.md). The rest of this README is upstream's and describes

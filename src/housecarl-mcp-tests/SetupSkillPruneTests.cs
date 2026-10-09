@@ -80,7 +80,9 @@ public sealed class SetupSkillPruneTests
         {
             string file = Path.Combine(skillRoot, "stuck-skill", "SKILL.md");
             SetupInstallerSandbox.WriteFile(file, "left behind");
-            File.SetAttributes(file, FileAttributes.ReadOnly);
+            // Read-only stops a delete on Windows; elsewhere the folder's own write bit does.
+            if (OperatingSystem.IsWindows()) File.SetAttributes(file, FileAttributes.ReadOnly);
+            else File.SetUnixFileMode(Path.GetDirectoryName(file)!, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         }
         File.WriteAllLines(record, File.ReadAllLines(record).Append("stuck-skill"));
         string claudeJson = SetupProgram.ClaudeJson(box.Home);
@@ -89,7 +91,15 @@ public sealed class SetupSkillPruneTests
         File.Delete(codexToml);
 
         SetupProgram.InstallResult stuck = null!;
-        string said = SetupInstallerSandbox.Capture(() => stuck = box.Install(SetupProgram.Target.Both));
+        string said;
+        try { said = SetupInstallerSandbox.Capture(() => stuck = box.Install(SetupProgram.Target.Both)); }
+        finally
+        {
+            if (!OperatingSystem.IsWindows())
+                foreach (string skillRoot in new[] { ClaudeSkills(box), CodexSkills(box) })
+                    File.SetUnixFileMode(Path.Combine(skillRoot, "stuck-skill"),
+                                         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
 
         Assert.Equal(SetupProgram.InstallOutcome.Installed, stuck.Outcome);
         Assert.Contains("housecarl", File.ReadAllText(claudeJson));

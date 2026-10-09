@@ -7,13 +7,13 @@ namespace HousecarlMcpTests;
 /// <summary>
 /// The import walk and the Debug-CRT verdict in <see cref="SksePluginReader"/>: a real native PE walks, a corrupt import
 /// name fails the whole walk, a managed image walks empty rather than unknown, and the curated debug-CRT list and blocker
-/// never turn a failed walk into a claim. Reads this machine's kernel32.dll and the core assembly; no world.
+/// never turn a failed walk into a claim. Reads a native kernel32.dll (Windows', or Wine's elsewhere) and the core assembly; no world.
 /// Migrated from the skse-peek-guard probe, part 2 (arms E to G2).
 /// </summary>
 [Trait("tier", "unit")]
 public sealed class SkseImportWalkTests
 {
-    static readonly string Kernel32 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "kernel32.dll");
+    static string Kernel32 => NativeDllFactAttribute.Path!;
 
     static SksePluginReader.SksePluginInfo Info(IReadOnlyList<string>? imports) =>
         new("x.dll", SksePluginReader.SksePluginKind.Modern, true,
@@ -34,7 +34,7 @@ public sealed class SkseImportWalkTests
     }
 
     // probe E: "a real native PE's import directory WALKS"; "…and yields its imports"
-    [Fact]
+    [NativeDllFact]
     public void ARealNativePesImportDirectoryWalksToANonEmptyList()
     {
         Assert.True(File.Exists(Kernel32), Kernel32);
@@ -44,7 +44,7 @@ public sealed class SkseImportWalkTests
     }
 
     // probe E: "import names are normalized lower-case for comparison"
-    [Fact]
+    [NativeDllFact]
     public void ImportNamesAreLowerCase()
     {
         var info = SksePluginReader.Read(Kernel32);
@@ -53,14 +53,14 @@ public sealed class SkseImportWalkTests
     }
 
     // probe E: "a system DLL is still classified NotSkse (no SKSE export)"
-    [Fact]
+    [NativeDllFact]
     public void ASystemDllIsClassifiedNotSkse()
     {
         Assert.Equal(SksePluginReader.SksePluginKind.NotSkse, SksePluginReader.Read(Kernel32).Kind);
     }
 
     // probe E2: "an unresolvable import-name RVA fails the WHOLE walk → null (UNKNOWN), never a silent short list"
-    [Fact]
+    [NativeDllFact]
     public void AnUnresolvableImportNameFailsTheWholeWalk()
     {
         var raw = File.ReadAllBytes(Kernel32);
