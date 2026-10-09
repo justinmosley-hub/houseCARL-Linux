@@ -81,34 +81,38 @@ static class StatusWire
             sb.Append("[!] the profile changed mid-call and a refresh is still pending — houseCARL re-reads it " +
                       "automatically on the next tool call (lazy refresh; no restart needed).\n");
 
+        // Every section is laid inside the cap together, so a cut list leaves room for the ones after it (#1016).
+        var sections = new List<BatchRender.TextSection>();
         // profile= renders before the filter branch, which returns early: the two compose, since filter verdicts the active profile while this inspects another.
-        if (profiles.RequestedName is not null) AppendNamedProfile(sb, profiles, cap);
+        if (profiles.RequestedName is not null) sections.AddRange(NamedProfile(profiles, cap));
 
         if (filter is { Length: > 0 })
         {
-            AppendLookup(sb, c, d.ExcludedPlugins, filter.Trim(), facts);
-            return sb.ToString().TrimEnd('\n');
+            var lookup = new StringBuilder();
+            AppendLookup(lookup, c, d.ExcludedPlugins, filter.Trim(), facts);
+            sections.Add(BatchRender.TextSection.Fixed(lookup.ToString()));
+            return Finish(sb, sections, cap);
         }
 
-        AppendExcluded(sb, d.ExcludedPlugins, cap);   // health alarm — before the routine name lists
-        AppendLogs(sb, logs);   // two lines only, before the cap-bounded name lists, so a long modlist can't truncate it away
-        AppendAvailableProfiles(sb, profiles, cap);   // makes the inactive-profile read discoverable
+        if (d.ExcludedPlugins.Count > 0) sections.Add(Excluded(d.ExcludedPlugins, cap));   // health alarm — before the routine name lists
+        sections.Add(BatchRender.TextSection.Fixed(Logs(logs)));   // two lines only, before the cap-bounded name lists, so a long modlist can't truncate it away
+        if (AvailableProfiles(profiles, cap) is { } available) sections.Add(available);   // makes the inactive-profile read discoverable
 
-        AppendList(sb, "disabled mods", c.DisabledMods, cap);
-        AppendList(sb, "inactive plugins", c.InactivePluginNames, cap);
-        AppendList(sb, "implicit masters / CC", c.ImplicitPluginNames, cap);
+        sections.Add(List("disabled mods", c.DisabledMods, cap));
+        sections.Add(List("inactive plugins", c.InactivePluginNames, cap));
+        sections.Add(List("implicit masters / CC", c.ImplicitPluginNames, cap));
 
         if (d.Warnings.Count > 0)
-        {
-            sb.Append("\nwarnings (").Append(d.Warnings.Count).Append("):\n");
-            int shown = 0;
-            foreach (var w in d.Warnings)
-            {
-                if (sb.Length >= cap) { sb.Append("  ... [").Append(d.Warnings.Count - shown).Append(" more omitted at max_chars=").Append(cap).Append("]\n"); break; }
-                sb.Append("  - ").Append(w).Append('\n'); shown++;
-            }
-        }
-        return sb.ToString().TrimEnd('\n');
+            sections.Add(new("\nwarnings (" + d.Warnings.Count + "):\n", d.Warnings.Select(w => "  - " + w + "\n").ToList(),
+                             shown => "  ... [" + (d.Warnings.Count - shown) + " more omitted at max_chars=" + cap + "]\n"));
+        return Finish(sb, sections, cap);
+    }
+
+    /// <summary>Lay the sections after the header inside the cap; a header and floors too wide for it say so.</summary>
+    static string Finish(StringBuilder sb, IReadOnlyList<BatchRender.TextSection> sections, int cap)
+    {
+        BatchRender.AppendSections(sb, RenderCap.For(cap, 0), sections);
+        return RenderCap.Settle(sb.ToString().TrimEnd('\n'), cap);
     }
 
     /// <summary>Where papyrus_logs and crash_logs resolve — saved, auto-detected, or unset — without persisting, since a read-only status call must mutate nothing.</summary>
@@ -124,8 +128,9 @@ static class StatusWire
     }
 
     /// <summary>The log-folders section: where the Papyrus script-log and SKSE crash-log directories resolve, rendered before the cap-bounded name lists so they can never be truncated away.</summary>
-    static void AppendLogs(StringBuilder sb, IReadOnlyList<LogFolderView> logs)
+    static string Logs(IReadOnlyList<LogFolderView> logs)
     {
+        var sb = new StringBuilder();
         sb.Append("\nlog folders (Read the .log files directly — logs have no wrapping tool):\n");
         foreach (var l in logs)
         {
@@ -136,52 +141,38 @@ static class StatusWire
                 _                           => $"not set — call {ToolNames.SetToolPath}(tool='{l.Key}', path='<folder>') to point houseCARL at it",
             }).Append('\n');
         }
+        return sb.ToString();
     }
 
     /// <summary>Plugins dropped from the index this build — unopenable, or carrying a record Mutagen cannot parse; rendered before the routine name lists so a long modlist cannot truncate it away.</summary>
-    static void AppendExcluded(StringBuilder sb, IReadOnlyDictionary<string, string> excluded, int cap)
-    {
-        if (excluded.Count == 0) return;
-        sb.Append("\n[!] EXCLUDED plugins (").Append(excluded.Count)
-          .Append(") — dropped from the index this session; houseCARL does NOT read these, every OTHER plugin works:\n");
-        int shown = 0;
-        foreach (var kv in excluded)
-        {
-            if (sb.Length >= cap) { sb.Append("  ... [").Append(excluded.Count - shown).Append(" more omitted at max_chars=").Append(cap).Append("]\n"); break; }
-            sb.Append("  - ").Append(kv.Key).Append(": ").Append(kv.Value).Append('\n'); shown++;
-        }
-    }
+    static BatchRender.TextSection Excluded(IReadOnlyDictionary<string, string> excluded, int cap) =>
+        new("\n[!] EXCLUDED plugins (" + excluded.Count +
+            ") — dropped from the index this session; houseCARL does NOT read these, every OTHER plugin works:\n",
+            excluded.Select(kv => "  - " + kv.Key + ": " + kv.Value + "\n").ToList(),
+            shown => "  ... [" + (excluded.Count - shown) + " more omitted at max_chars=" + cap + "]\n");
 
-    static void AppendList(StringBuilder sb, string label, IReadOnlyList<string> names, int cap)
-    {
-        sb.Append('\n').Append(label).Append(" (").Append(names.Count).Append("):");
-        if (names.Count == 0) { sb.Append(" none\n"); return; }
-        sb.Append('\n');
-        int shown = 0;
-        foreach (var n in names)
-        {
-            if (sb.Length >= cap) { sb.Append("  ... [showing ").Append(shown).Append(" of ").Append(names.Count).Append("; raise max_chars to see all]\n"); break; }
-            sb.Append("  - ").Append(n).Append('\n'); shown++;
-        }
-    }
+    static BatchRender.TextSection List(string label, IReadOnlyList<string> names, int cap) =>
+        new("\n" + label + " (" + names.Count + "):" + (names.Count == 0 ? " none\n" : "\n"),
+            names.Select(n => "  - " + n + "\n").ToList(),
+            shown => "  ... [showing " + shown + " of " + names.Count + "; raise max_chars to see all]\n");
 
     /// <summary>Render the requested named profile's composition, or a refusal: explicit-paths mode has no profiles folder, and a name matching none lists the real options. A match says plainly that the active profile is unchanged.</summary>
-    static void AppendNamedProfile(StringBuilder sb, NamedProfileResult p, int cap)
+    static IEnumerable<BatchRender.TextSection> NamedProfile(NamedProfileResult p, int cap)
     {
         if (!p.InstanceMode)
         {
-            sb.Append("\nprofile '").Append(p.RequestedName)
-              .Append("': can't inspect — that needs MO2-instance mode; in explicit-paths mode there is no profiles folder to read from.\n");
-            return;
+            yield return BatchRender.TextSection.Fixed("\nprofile '" + p.RequestedName +
+                "': can't inspect — that needs MO2-instance mode; in explicit-paths mode there is no profiles folder to read from.\n");
+            yield break;
         }
         if (p.Composition is null)                                // not found: name the real options, never an empty composition
         {
-            sb.Append("\nprofile '").Append(p.RequestedName).Append("' not found — ");
-            AppendProfileNames(sb, "available", p.AvailableProfiles, cap);
-            return;
+            yield return ProfileNames("\nprofile '" + p.RequestedName + "' not found — available", p.AvailableProfiles, cap);
+            yield break;
         }
         var c = p.Composition;
         int active = c.ActivePluginNames.Count + c.ImplicitPluginNames.Count;
+        var sb = new StringBuilder();
         sb.Append("\n— inspecting profile '").Append(p.RequestedName).Append("' (read-only; the active profile is unchanged):\n");
         sb.Append("  mods:    ").Append(c.EnabledMods.Count).Append(" enabled · ").Append(c.DisabledMods.Count).Append(" disabled\n");
         sb.Append("  plugins: ").Append(c.OrderedPluginNames.Count).Append(" in order · ").Append(active).Append(" active · ")
@@ -189,35 +180,25 @@ static class StatusWire
         // Any read note, e.g. a missing modlist.txt, so a zero-enabled-mods inspection is not mistaken for an empty profile.
         foreach (var warn in p.Warnings)
             sb.Append("  [!] ").Append(warn).Append('\n');
-        AppendList(sb, "  disabled mods", c.DisabledMods, cap);
-        AppendList(sb, "  inactive plugins", c.InactivePluginNames, cap);
+        yield return BatchRender.TextSection.Fixed(sb.ToString());
+        yield return List("  disabled mods", c.DisabledMods, cap);
+        yield return List("  inactive plugins", c.InactivePluginNames, cap);
     }
 
     /// <summary>The available profile names, so the inactive-profile read is discoverable; suppressed in explicit-paths mode and when profile= was asked for, which lists them on a miss.</summary>
-    static void AppendAvailableProfiles(StringBuilder sb, NamedProfileResult p, int cap)
+    static BatchRender.TextSection? AvailableProfiles(NamedProfileResult p, int cap)
     {
-        if (!p.InstanceMode || p.RequestedName is not null) return;
-        sb.Append('\n');
-        AppendProfileNames(sb, "profiles available", p.AvailableProfiles, cap);
-        if (p.AvailableProfiles.Count > 0)
-            sb.Append("  → pass profile='<name>' to inspect any of these WITHOUT switching to it.\n");
+        if (!p.InstanceMode || p.RequestedName is not null) return null;
+        return ProfileNames("\nprofiles available", p.AvailableProfiles, cap,
+            p.AvailableProfiles.Count > 0 ? "  → pass profile='<name>' to inspect any of these WITHOUT switching to it.\n" : "");
     }
 
     /// <summary>One line of comma-joined profile names, cap-bounded with an explicit cut notice.</summary>
-    static void AppendProfileNames(StringBuilder sb, string label, IReadOnlyList<string> names, int cap)
-    {
-        sb.Append(label).Append(" (").Append(names.Count).Append(')');
-        if (names.Count == 0) { sb.Append(": none\n"); return; }
-        sb.Append(": ");
-        int shown = 0;
-        foreach (var n in names)
-        {
-            if (sb.Length >= cap) { sb.Append(" ... [").Append(names.Count - shown).Append(" more omitted at max_chars=").Append(cap).Append(']'); break; }
-            if (shown > 0) sb.Append(", ");
-            sb.Append(n); shown++;
-        }
-        sb.Append('\n');
-    }
+    static BatchRender.TextSection ProfileNames(string label, IReadOnlyList<string> names, int cap, string after = "") =>
+        names.Count == 0
+            ? BatchRender.TextSection.Fixed(label + " (0): none\n" + after)
+            : new(label + " (" + names.Count + "): ", names.Select((n, i) => i == 0 ? n : ", " + n).ToList(),
+                  shown => " ... [" + (names.Count - shown) + " more omitted at max_chars=" + cap + "]", "\n" + after);
 
     static void AppendLookup(StringBuilder sb, HousecarlCore.Mo2Composition c,
                              IReadOnlyDictionary<string, string> excluded, string name,

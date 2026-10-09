@@ -42,16 +42,14 @@ public static class BsaTools
         sb.Append(Path.GetFileName(archive)).Append("  [").Append(r.Format ?? "unknown format").Append("]  ")
           .Append(r.DeclaredCount).Append(" file(s)");
         if (selectors is not null) sb.Append(", ").Append(files.Count).Append(" matching under=");
-        AssetWire.AppendSelectorNotes(sb, notes, RenderCap.For(cap, 0));
-        if (counts_only) return sb.ToString().TrimEnd('\n');
+        // The file list is laid inside the cap with its cut notice held, and the notes before it leave its floor (#1016).
+        var list = new BatchRender.TextSection("", files.Select(f => "  " + f + "\n").ToList(),
+                                               shown => "  ... [" + (files.Count - shown) + " more omitted at max_chars=" + cap + "]\n");
+        AssetWire.AppendSelectorNotes(sb, notes, RenderCap.For(cap, counts_only ? 0 : list.Floor + 1));   // + the line break the list may start with
+        if (counts_only) return RenderCap.Settle(sb.ToString().TrimEnd('\n'), cap);
         if (sb[^1] != '\n') sb.Append('\n');
-        int shown = 0;
-        foreach (var f in files)
-        {
-            if (sb.Length >= cap) { sb.Append("  ... [").Append(files.Count - shown).Append(" more omitted at max_chars=").Append(cap).Append("]\n"); break; }
-            sb.Append("  ").Append(f).Append('\n'); shown++;
-        }
-        return sb.ToString().TrimEnd('\n');
+        BatchRender.AppendSections(sb, RenderCap.For(cap, 0), new[] { list });
+        return RenderCap.Settle(sb.ToString().TrimEnd('\n'), cap);
     });
 
     const string UnderText =

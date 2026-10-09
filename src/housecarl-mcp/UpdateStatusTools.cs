@@ -60,10 +60,14 @@ static class UpdateStatusWire
         sb.Append('\n');
         foreach (var p in d.Problems) sb.Append("[!] ").Append(p).Append('\n');
 
-        AppendEntries(sb, "installed ≠ MO2's cached newest — CANDIDATES to verify (direction not assured)", flagged, cap);
-        AppendEntries(sb, "ignored — you told MO2 to skip this version", ignored, cap);
-
-        sb.Append("\nnote: this is MO2's OWN cached view, not a live check. A 'differ' is only a CANDIDATE — MO2's cached ")
+        // The two lists and the note after them are laid inside the cap together, so a cut list leaves room for the rest (#1016).
+        var sections = new List<BatchRender.TextSection>
+        {
+            Entries("installed ≠ MO2's cached newest — CANDIDATES to verify (direction not assured)", flagged, cap),
+            Entries("ignored — you told MO2 to skip this version", ignored, cap),
+        };
+        var note = new StringBuilder();
+        note.Append("\nnote: this is MO2's OWN cached view, not a live check. A 'differ' is only a CANDIDATE — MO2's cached ")
           .Append("'newest' can be stale or a different version scheme (some installed versions here are actually NEWER than ")
           .Append("the cached value), so the direction is not assured and 'never checked' is NOT 'up to date'. Many Nexus ")
           .Append("pages also host several independently-versioned files, so a cached 'differ' is often a false alarm. To ")
@@ -71,32 +75,33 @@ static class UpdateStatusWire
           .Append("'verify:' token) — it checks each installed FILE's live status directly, clearing the multi-file-page ")
           .Append("false positive; then " + ToolNames.NexusMod + " changelog=true to see what changed. (Rows with no fileid can't ")
           .Append("be checked at file level — verify those by hand.)");
-        return sb.ToString().TrimEnd('\n');
+        sections.Add(BatchRender.TextSection.Fixed(note.ToString()));
+        BatchRender.AppendSections(sb, RenderCap.For(cap, 0), sections);
+        return RenderCap.Settle(sb.ToString().TrimEnd('\n'), cap);
     }
 
-    static void AppendEntries(StringBuilder sb, string label, IReadOnlyList<ModUpdateEntry> rows, int cap)
+    static BatchRender.TextSection Entries(string label, IReadOnlyList<ModUpdateEntry> rows, int cap) =>
+        new("\n" + label + " (" + rows.Count + "):" + (rows.Count == 0 ? " none\n" : "\n"),
+            rows.Select(Row).ToList(),
+            shown => "  ... [" + (rows.Count - shown) + " more omitted at max_chars=" + cap + "]\n");
+
+    static string Row(ModUpdateEntry e)
     {
-        sb.Append('\n').Append(label).Append(" (").Append(rows.Count).Append("):");
-        if (rows.Count == 0) { sb.Append(" none\n"); return; }
+        var sb = new StringBuilder();
+        sb.Append("  - ").Append(e.Folder);
+        if (e.Enabled == false) sb.Append("  [disabled]");
+        sb.Append("  [id ").Append(e.ModId).Append("]  installed v").Append(e.Installed ?? "?")
+          .Append(" · MO2 cached v").Append(e.Newest ?? "?");
+        // The installed file ids are the join key for a file-level live check, which is what clears the multi-file-page false positive; a FOMOD or manual mod has none, and that is stated.
+        if (e.InstalledFileIds.Count > 0)
+            sb.Append("  · verify: ").Append(e.ModId).Append('#')
+              .Append(string.Join("#", e.InstalledFileIds));   // '#' joins fileids — ',' separates ENTRIES in the check grammar
+        else
+            sb.Append("  · no fileid (FOMOD/manual — file-level check n/a)");
+        var checkedOn = StaleDay(e.LastUpdate);
+        if (checkedOn is not null) sb.Append("  (checked ").Append(checkedOn).Append(')');
         sb.Append('\n');
-        int shown = 0;
-        foreach (var e in rows)
-        {
-            if (sb.Length >= cap) { sb.Append("  ... [").Append(rows.Count - shown).Append(" more omitted at max_chars=").Append(cap).Append("]\n"); break; }
-            sb.Append("  - ").Append(e.Folder);
-            if (e.Enabled == false) sb.Append("  [disabled]");
-            sb.Append("  [id ").Append(e.ModId).Append("]  installed v").Append(e.Installed ?? "?")
-              .Append(" · MO2 cached v").Append(e.Newest ?? "?");
-            // The installed file ids are the join key for a file-level live check, which is what clears the multi-file-page false positive; a FOMOD or manual mod has none, and that is stated.
-            if (e.InstalledFileIds.Count > 0)
-                sb.Append("  · verify: ").Append(e.ModId).Append('#')
-                  .Append(string.Join("#", e.InstalledFileIds));   // '#' joins fileids — ',' separates ENTRIES in the check grammar
-            else
-                sb.Append("  · no fileid (FOMOD/manual — file-level check n/a)");
-            var checkedOn = StaleDay(e.LastUpdate);
-            if (checkedOn is not null) sb.Append("  (checked ").Append(checkedOn).Append(')');
-            sb.Append('\n'); shown++;
-        }
+        return sb.ToString();
     }
 
     /// <summary>Unix-seconds string → yyyy-MM-dd, or null if it isn't a usable timestamp.</summary>

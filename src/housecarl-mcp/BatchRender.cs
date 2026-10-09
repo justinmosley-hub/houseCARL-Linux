@@ -272,4 +272,40 @@ static class BatchRender
         }
         if (shown < lines.Count) AppendCut(sb, lines.Count - shown, itemNoun, cap.Cap);
     }
+
+    /// <summary>One section of a text render that writes several in a row: a heading that always renders, the lines
+    /// that are cut to fit, the notice a cut closes with (given how many lines were shown), and what follows them.
+    /// A section with no lines is fixed text.</summary>
+    public sealed record TextSection(string Heading, IReadOnlyList<string> Lines, Func<int, string> Cut, string Close = "")
+    {
+        public static TextSection Fixed(string text) => new(text, Array.Empty<string>(), _ => "");
+
+        /// <summary>What the section writes however little room it gets: its heading, the notice for zero lines, its close.</summary>
+        public int Floor => Heading.Length + (Lines.Count > 0 ? Cut(0).Length : 0) + Close.Length;
+    }
+
+    /// <summary>Several sections inside one cap (#1016): a line is written only when it fits whole with room held
+    /// for every LATER section's floor and for its own cut notice — that notice is held only while lines remain, so a
+    /// list that fits is not cut for it (#641). The one arm past the cap is a floor that does not fit, which the
+    /// caller's <see cref="RenderCap.Settle"/> names.</summary>
+    public static void AppendSections(StringBuilder sb, RenderCap cap, IReadOnlyList<TextSection> sections)
+    {
+        for (int i = 0; i < sections.Count; i++)
+        {
+            var s = sections[i];
+            int later = s.Close.Length;
+            for (int j = i + 1; j < sections.Count; j++) later += sections[j].Floor;
+            var room = cap.Less(later);
+            sb.Append(s.Heading);
+            int shown = 0;
+            for (; shown < s.Lines.Count; shown++)
+            {
+                int hold = shown == s.Lines.Count - 1 ? 0 : s.Cut(shown + 1).Length;
+                if (!room.Fits(sb, s.Lines[shown].Length + hold)) break;
+                sb.Append(s.Lines[shown]);
+            }
+            if (shown < s.Lines.Count) sb.Append(s.Cut(shown));
+            sb.Append(s.Close);
+        }
+    }
 }
