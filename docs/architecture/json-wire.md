@@ -82,10 +82,18 @@ fixed part comes out of the budget the findings are listed from.
 `epoch_covers_all_inputs` is false when off-order files were swept beside the index, or when the family reports
 verdicts read off another substrate, which `epoch_uncovered` names.
 
+### One document, whatever the OS
+
+`JsonWire.Opts` pins `NewLine` to `\n`. Left unset, `System.Text.Json` indents with `Environment.NewLine`, so the same
+call wrote `\r\n` on Windows and `\n` on Linux: one character more per line on Windows, every `max_chars` cut landing
+somewhere else, and every measured size in a test true on one OS only. The text renders write `\n` already.
+
 ### A capped STRING list is an array plus a sibling count
 
 Where a list of plain strings is bounded — the build-level caveat blocks, and `Wire.ContestedHostsShown` on the text
-lane — what did not fit is a sibling `<name>_omitted` number, never a prose marker element inside the array. A marker
+lane — what did not fit is a sibling `<name>_omitted` number, never a prose marker element inside the array. Past the
+first, an element is admitted only when `MeasureUnit` says it fits (`WriteCappedStringArray`), as the text lane's
+`TryAppend` does; a check of whether the document is ALREADY over lets the element that crosses land whole (#859). A marker
 element would be handed to a consumer iterating the array as if it were an entry, and the array length would stop
 matching the count the accounting states.
 

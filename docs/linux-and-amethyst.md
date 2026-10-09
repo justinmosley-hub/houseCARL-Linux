@@ -14,6 +14,8 @@ backend, writes into Amethyst, and Papyrus compile through Wine are next, in tha
 |---|---|---|
 | `DiskPath` / `GamePath` in core; game paths go through them | Linux file names are case-sensitive and `\` is not a separator there | [`architecture/linux-paths.md`](architecture/linux-paths.md), [ADR 0006](decisions/0006-game-paths-resolve-case-insensitively-on-linux.md) |
 | `HarnessPaths.ServerExe` in the tests | The built server has no `.exe` on Linux | the property itself |
+| json written with `\n` on every OS (`JsonWire.Opts`) | .NET indents with the OS line break by default, so Windows and Linux returned different documents | [`architecture/json-wire.md`](architecture/json-wire.md) "One document, whatever the OS" |
+| json caveats and asset rows measured before they are written | The item that crossed `max_chars` was written whole; it showed on Linux because line-break width moved where items end | [`architecture/json-wire.md`](architecture/json-wire.md), `AssetSelectTests.NoCaveatOrRowPastTheFirstCrossesTheCeilingAtAnyCap` |
 
 ## Windows → Linux, for this codebase
 

@@ -514,7 +514,7 @@ public sealed class AssetSelectTests : IClassFixture<AssetSelectWorld>
     [Fact]
     public void TheJsonCensusFitsTheMaxCharsItWasGiven()
     {
-        const int Cap = 1_300;
+        const int Cap = 1_235;   // two of the three layer rows fit between 1203 and 1267
         var text = AssetTools.AssetStatus(_w.Svc, under: new[] { AssetSelectWorld.FaceGeomDir },
                                           counts_only: true, format: "json", max_chars: Cap);
 

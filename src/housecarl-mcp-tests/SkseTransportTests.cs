@@ -858,16 +858,22 @@ public sealed class SkseTransportTests
         }
     }
 
-    /// <summary>The pairing family straight into its render, at the cap the row arrays' unreserved framing used to
-    /// carry it over: a non-empty unreadable list leaves nothing to absorb the framing written past the last row.</summary>
+    /// <summary>The pairing family straight into its render, over a band of caps where the row arrays' unreserved
+    /// framing used to carry it over: a non-empty unreadable list leaves nothing to absorb the framing written past
+    /// the last row. A band, not one cap, because one cap passes or fails on where the rows happen to end.</summary>
     [Fact]
     public void ThePairingFamilysUnreadableListDoesNotPushItsDocumentOverTheCap()
     {
-        string json = NativePairingWire.RenderJson(Pairing(300, unreadable: 50), null, 2_680);
+        int withUnreadable = 0;
+        for (int cap = 2_400; cap <= 3_000; cap++)
+        {
+            string json = NativePairingWire.RenderJson(Pairing(300, unreadable: 50), null, cap);
 
-        using var doc = JsonDocument.Parse(json);
-        Assert.True(json.Length <= 2_680, $"returned {json.Length} chars at max_chars=2680");
-        Assert.NotEmpty(doc.RootElement.GetProperty("unreadable_pex").EnumerateArray());
+            using var doc = JsonDocument.Parse(json);
+            Assert.True(json.Length <= cap, $"returned {json.Length} chars at max_chars={cap}");
+            if (doc.RootElement.GetProperty("unreadable_pex").GetArrayLength() > 0) withUnreadable++;
+        }
+        Assert.True(withUnreadable > 0, "no cap in the band rendered a non-empty unreadable list");
     }
 
 

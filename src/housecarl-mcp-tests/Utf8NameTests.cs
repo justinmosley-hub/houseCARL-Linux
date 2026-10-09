@@ -432,7 +432,7 @@ public sealed class Utf8NameTests : IDisposable
                     "the document is all ASCII — it cannot tell the units apart");
 
         int boundary = SmallestWholeCap(Render, whole.Length);
-        Assert.Equal(859, boundary);
+        Assert.Equal(824, boundary);
         Assert.True(Truncated(Render(boundary - 1)), "one character below the boundary the rows still all fit");
     }
 
