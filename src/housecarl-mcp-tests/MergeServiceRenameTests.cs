@@ -79,7 +79,7 @@ public sealed class MergeServiceRenameTests
         var outDir = Path.GetDirectoryName(Ok().OutputPath)!;
         var face = FaceGenPath.Both(R(0xA20)).ToList();
         Assert.Equal(2, face.Count);
-        Assert.All(face, x => Assert.True(File.Exists(Path.Combine(outDir, x.Item2)), x.Item2));
+        Assert.All(face, x => Assert.True(File.Exists(DiskPath.Combine(outDir, x.Item2)), x.Item2));
         Assert.Equal(2, Ok().AssetRename?.FacegenFilesCarried);
     }
 

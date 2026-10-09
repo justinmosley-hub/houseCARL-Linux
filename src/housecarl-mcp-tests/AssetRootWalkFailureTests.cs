@@ -110,7 +110,7 @@ public sealed class AssetProvedAbsenceTests : IDisposable
     public void ASelectorThatNamesAFileRaisesNoRootFailure()
     {
         Directory.CreateDirectory(Path.Combine(_mod, "meshes"));
-        File.WriteAllText(Path.Combine(_mod, @"meshes\a.nif"), "x");
+        File.WriteAllText(DiskPath.Combine(_mod, @"meshes\a.nif"), "x");
 
         using var r = Build();
         r.EnumerateUnder(@"meshes\a.nif");
@@ -209,20 +209,20 @@ sealed class UnreadableRootWorld : IDisposable
                .WithLoadOrder(Array.Empty<ISkyrimModGetter>()).Write();
         }
 
-        var readable = Path.Combine(assetMod, SweepDir);
+        var readable = DiskPath.Combine(assetMod, SweepDir);
         Directory.CreateDirectory(readable);
         File.WriteAllText(Path.Combine(readable, "ok.nif"), "x");
 
         // The blocked mod's two subtrees are written BEFORE any deny, so no failure below can leave an ACE behind.
-        TopSweepDir = Path.Combine(_topDir, SweepDir);
-        TopTextureDir = Path.Combine(_topDir, TextureDir);
+        TopSweepDir = DiskPath.Combine(_topDir, SweepDir);
+        TopTextureDir = DiskPath.Combine(_topDir, TextureDir);
         Directory.CreateDirectory(TopSweepDir);
         Directory.CreateDirectory(TopTextureDir);
         File.WriteAllText(Path.Combine(TopSweepDir, "top.nif"), "x");
         File.WriteAllText(Path.Combine(TopTextureDir, "top.dds"), "x");
 
         // One mod blocks a subdirectory of its own copy: the recursive walk starts and throws part way through.
-        _lockedDir = Path.Combine(mods, SubBlockedMod, SweepDir, "locked");
+        _lockedDir = DiskPath.Combine(Path.Combine(mods, SubBlockedMod), Path.Combine(SweepDir, "locked"));
         Directory.CreateDirectory(_lockedDir);
         File.WriteAllText(Path.Combine(_lockedDir, "hidden.nif"), "x");
 

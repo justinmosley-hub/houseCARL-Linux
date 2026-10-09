@@ -82,7 +82,7 @@ public sealed class ProfileRewriteTests
 
         static void Loose(string modDir, string rel)
         {
-            var p = Path.Combine(modDir, rel);
+            var p = DiskPath.Combine(modDir, rel);
             Directory.CreateDirectory(Path.GetDirectoryName(p)!);
             File.WriteAllText(p, "x");
         }

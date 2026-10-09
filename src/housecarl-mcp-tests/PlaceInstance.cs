@@ -94,14 +94,14 @@ public sealed class PlaceInstance : IDisposable
 
     public static void Loose(string baseDir, string rel, byte[] bytes)
     {
-        var p = Path.Combine(baseDir, rel);
+        var p = DiskPath.Combine(baseDir, rel);
         Directory.CreateDirectory(Path.GetDirectoryName(p)!);
         File.WriteAllBytes(p, bytes);
     }
 
     /// <summary>The placed file for a service-level outcome, or null when no folder was reported or the file is absent.</summary>
     public static string? PlacedAt(PlaceOutcome o, string rel) =>
-        o.ModFolder is null ? null : (File.Exists(Path.Combine(o.ModFolder, rel)) ? Path.Combine(o.ModFolder, rel) : null);
+        o.ModFolder is null ? null : (File.Exists(DiskPath.Combine(o.ModFolder, rel)) ? DiskPath.Combine(o.ModFolder, rel) : null);
 
     /// <summary>The on-disk path of a file placed by a tool-level call, read off the render's "mod folder:" line rather
     /// than rebuilt from the naming convention. Null = no folder reported, or the file is not there.</summary>
@@ -114,7 +114,7 @@ public sealed class PlaceInstance : IDisposable
             var name = t["mod folder:".Length..].Trim();
             var cut = name.IndexOf("  —", StringComparison.Ordinal);
             if (cut >= 0) name = name[..cut].Trim();
-            var p = Path.Combine(Mods, name, rel);
+            var p = DiskPath.Combine(Path.Combine(Mods, name), rel);
             return File.Exists(p) ? p : null;
         }
         return null;

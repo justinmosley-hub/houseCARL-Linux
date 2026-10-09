@@ -304,7 +304,7 @@ internal sealed partial class RecordWrites
                     new[] { $"voice carry skipped — the asset layer could not be built ({ex.Message}); verify voiced lines in-game." }, false);
             }
             // The check is the VFS answer whenever the view resolved; only an unresolved view falls back to the loose check.
-            bool sourceHadSeq = seqGate ?? File.Exists(Path.Combine(Path.GetDirectoryName(srcPath)!, srcSeqRel));
+            bool sourceHadSeq = seqGate ?? File.Exists(DiskPath.Combine(Path.GetDirectoryName(srcPath)!, srcSeqRel));
 
             // Refresh the start-game-enabled-quest .seq from the renumbered plugin when the source shipped one, never
             // inventing one. Best-effort and reported: it never throws and never fails the compact.

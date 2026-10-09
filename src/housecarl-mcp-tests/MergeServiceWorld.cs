@@ -89,7 +89,7 @@ public sealed class MergeServiceWorld : IDisposable
         }
         foreach (var (_, rel) in FaceGenPath.Both(ANpc))
         {
-            var p = Path.Combine(aDir, rel); Directory.CreateDirectory(Path.GetDirectoryName(p)!);
+            var p = DiskPath.Combine(aDir, rel); Directory.CreateDirectory(Path.GetDirectoryName(p)!);
             File.WriteAllBytes(p, new byte[] { 0xFA, 0xCE });
         }
         var aVoice = Path.Combine(aDir, "Sound", "Voice", AKey.FileName.String, "MaleEvenToned", VoiceFile);

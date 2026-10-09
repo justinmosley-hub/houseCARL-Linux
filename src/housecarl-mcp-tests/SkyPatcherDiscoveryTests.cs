@@ -45,7 +45,7 @@ public sealed class SkyPatcherDiscoveryTests : IDisposable
 
     static void Write(string baseDir, string rel, string text)
     {
-        var p = Path.Combine(baseDir, rel);
+        var p = DiskPath.Combine(baseDir, rel);
         Directory.CreateDirectory(Path.GetDirectoryName(p)!);
         File.WriteAllText(p, text);
     }

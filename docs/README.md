@@ -4,6 +4,7 @@
 - **`decisions/`**: short numbered records of architectural decisions, one per file: context, decision, consequences. A PR that changes the architecture adds one. A change of mind is a new record that names the one it replaces.
 
 New here? Read [README.md](../README.md), then [CLAUDE.md](../CLAUDE.md), then the note for the subsystem you are entering.
+On Linux or Amethyst? Start at [linux-and-amethyst.md](linux-and-amethyst.md).
 
 ## The pieces, and who calls whom
 
@@ -52,6 +53,7 @@ Grouped to match the "Where things live" table in [CLAUDE.md](../CLAUDE.md), so 
 | Note | What it covers |
 |---|---|
 | [`architecture/assets.md`](architecture/assets.md) | Which copy of a file the game uses: loose beats BSA-packed, the overwrite-then-mods-then-Data walk, and the archive tie-break. |
+| [`architecture/linux-paths.md`](architecture/linux-paths.md) | A game path keeps `\` and is matched without regard to case; `DiskPath` finds it on a case-sensitive disk, `GamePath` takes it apart. |
 | [`architecture/skse-layer.md`](architecture/skse-layer.md) | What an SKSE DLL declares and the static-load rule: everything in the layer is what a file declares, never what a DLL does. |
 | [`architecture/skypatcher-layer.md`](architecture/skypatcher-layer.md) | SkyPatcher edits records from INI files at load, so a plugin read alone does not say what the game sees; houseCARL reads that layer in four tiers. |
 | [`architecture/nif.md`](architecture/nif.md) | Reading mesh values and the two write gates: `NifService` is pure format logic, and the service layer resolves the winning bytes. |
@@ -122,3 +124,4 @@ Grouped to match the "Where things live" table in [CLAUDE.md](../CLAUDE.md), so 
 | [`decisions/0003-guards-move-to-a-standard-test-project.md`](decisions/0003-guards-move-to-a-standard-test-project.md) | Guards move to a standard test project, behind a residue countdown. Superseded 2026-09-04. |
 | [`decisions/0004-tool-names-are-compile-time-constants.md`](decisions/0004-tool-names-are-compile-time-constants.md) | Tool names are compile-time constants, never spelled by hand. |
 | [`decisions/0005-the-1x-tools-are-deleted-not-deprecated.md`](decisions/0005-the-1x-tools-are-deleted-not-deprecated.md) | The 1.x tools are deleted, not deprecated. |
+| [`decisions/0006-game-paths-resolve-case-insensitively-on-linux.md`](decisions/0006-game-paths-resolve-case-insensitively-on-linux.md) | Game paths resolve case-insensitively on Linux, through one helper in core. |

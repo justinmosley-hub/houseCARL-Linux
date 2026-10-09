@@ -29,7 +29,7 @@ public sealed class CreatedLineVoiceCheckTests : IDisposable
         Directory.CreateDirectory(dir);
         foreach (var rel in files)
         {
-            var full = Path.Combine(dir, rel);
+            var full = DiskPath.Combine(dir, rel);
             Directory.CreateDirectory(Path.GetDirectoryName(full)!);
             File.WriteAllBytes(full, new byte[] { 0, 1, 2 });
         }

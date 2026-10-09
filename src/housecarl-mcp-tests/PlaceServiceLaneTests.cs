@@ -40,7 +40,7 @@ public sealed class PlaceServiceLaneTests
         Assert.NotNull(placed);
         Assert.Equal(correctBytes, File.ReadAllBytes(placed!));
         Assert.Equal(correctBytes, File.ReadAllBytes(correctSrc));
-        Assert.Equal(wrongBytes, File.ReadAllBytes(Path.Combine(wrong, FacegenRel)));
+        Assert.Equal(wrongBytes, File.ReadAllBytes(DiskPath.Combine(wrong, FacegenRel)));
 
         var placedMod = Path.GetFileName(outcome.ModFolder!);
         p.Profile(new[] { "Dummy.esp" }, new[] { "*Dummy.esp" }, new[] { "+" + placedMod, "+WrongFace" });
@@ -170,7 +170,7 @@ public sealed class PlaceServiceLaneTests
         }, "GKeepFolder", null);
 
         Assert.NotNull(partial.ModFolder);
-        Assert.True(File.Exists(Path.Combine(partial.ModFolder!, FacegenRel)));
+        Assert.True(File.Exists(DiskPath.Combine(partial.ModFolder!, FacegenRel)));
         Assert.False(partial.Results[1].Placed);
     }
 
@@ -208,7 +208,7 @@ public sealed class PlaceServiceLaneTests
 
         var first = svc.PlaceAssets(new[] { new PlaceRequest(FacegenRel, srcV1) }, "RouteProv", null);
         Assert.True(first.Results[0].Placed, first.Results[0].Error);
-        var dest = Path.Combine(first.ModFolder!, FacegenRel);
+        var dest = DiskPath.Combine(first.ModFolder!, FacegenRel);
         var oldCreate = new DateTime(2019, 6, 6, 0, 0, 0, DateTimeKind.Utc);
         bool tunnelingMasks = PlaceCoreTests.TunnelingMasksCreationTime(first.ModFolder!, oldCreate);
         File.SetCreationTimeUtc(dest, oldCreate);

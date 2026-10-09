@@ -889,7 +889,7 @@ internal sealed partial class AssetLayers
         try { rf = _output.ResolvePatchModFolder(patchName, into, "houseCARL_NifEdit", new OutputLocations.RiderNaming("patch", Noun: "edited mesh")); }
         catch (InvalidOperationException ex) { return NifSetResult.Fail(ex.Message, providers, profileName); }
 
-        var dest = Path.Combine(rf.OutputDir, rel);
+        var dest = DiskPath.Combine(rf.OutputDir, rel);
         try { Directory.CreateDirectory(Path.GetDirectoryName(dest)!); AtomicFile.WriteAllBytes(dest, editedBytes); }
         catch (Exception ex)
         {
@@ -1102,7 +1102,7 @@ internal sealed partial class AssetLayers
         }
 
         // ---- crash-atomic place under the owned folder (originals untouched; same-volume staging done in the core) ----
-        var dest = Path.Combine(outDir, rel);
+        var dest = DiskPath.Combine(outDir, rel);
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);

@@ -12,7 +12,7 @@ public sealed class RawModsPathRefusalTests : IClassFixture<AssetSelectWorld>
     readonly AssetSelectWorld _w;
     public RawModsPathRefusalTests(AssetSelectWorld w) => _w = w;
 
-    string InFaceBase(string rel) => Path.Combine(_w.ModsDir, "FaceBase", rel);
+    string InFaceBase(string rel) => DiskPath.Combine(Path.Combine(_w.ModsDir, "FaceBase"), rel);
 
     [Fact]
     public void PlaceRefusesARawModsPathAsTheSourceAndNamesTheModFolderToUseInstead()

@@ -304,14 +304,14 @@ public sealed class AssetResolver : IDisposable
     {
         // ---- loose, in MO2 precedence order — via the per-subtree cache (warmed on first touch) ----
         var opened = AsWindowsOpens(rel);                          // the loose lookup only: an archive entry is matched as asked
-        var subtreeDir = Normalize(Path.GetDirectoryName(opened) ?? "");
-        var fname = Path.GetFileName(opened);
+        var subtreeDir = Normalize(GamePath.DirectoryName(opened));
+        var fname = GamePath.FileName(opened);
         var st = snap.LooseCache.GetOrAdd(subtreeDir, d => WarmSubtree(d, snap, pass));
         var loose = new List<PlacementSource>();
         foreach (var (rootIndex, files) in st.Present)               // Present is already in precedence order
             if (files.Contains(fname))
                 loose.Add(new PlacementSource(_looseRoots[rootIndex].Name, AssetKind.Loose,
-                    LooseFilePath: Path.Combine(_looseRoots[rootIndex].Dir, opened), ArchivePath: null, EntryPath: rel));
+                    LooseFilePath: DiskPath.Combine(_looseRoots[rootIndex].Dir, opened), ArchivePath: null, EntryPath: rel));
 
         // ---- BSA, highest plugin rank first ----
         var bsa = new List<(PlacementSource source, int rank)>();
@@ -412,7 +412,7 @@ public sealed class AssetResolver : IDisposable
         // loose: recurse each root's copy of the prefix dir (set-UNION across roots — the per-path winner is decided later).
         foreach (var (rootName, rootDir) in _looseRoots)
         {
-            var baseDir = Path.Combine(rootDir, pre);
+            var baseDir = DiskPath.Combine(rootDir, pre);
             // A "not there" is only an absence when it can be proved one; unreadable is named inside.
             if (!Directory.Exists(baseDir)) { AbsenceIsReal(rootName, rootDir, pre, baseDir, snap); continue; }
             try
@@ -575,7 +575,7 @@ public sealed class AssetResolver : IDisposable
                 if (listed is { Count: > 0 }) present.Add((i, listed));
                 continue;
             }
-            var dir = subtreeDir.Length == 0 ? roots[i].Dir : Path.Combine(roots[i].Dir, subtreeDir);
+            var dir = subtreeDir.Length == 0 ? roots[i].Dir : DiskPath.Combine(roots[i].Dir, subtreeDir);
             // ONE read of this root's copy: the whole listing is the watch baseline, the filenames in it are what the
             // subtree resolves from. Two reads of one directory would only differ by the split second between them.
             var (names, files, absent) = SafeListing(dir, roots[i].Name, roots[i].Dir, subtreeDir, snap);
@@ -612,7 +612,8 @@ public sealed class AssetResolver : IDisposable
                 snap.DirWatch.GetOrAdd(dir, _ => new WatchedDir()).FileHeld[name] = 0;
                 return true;
             }
-            dir = Path.Combine(dir, name);                              // a file under a dropped Files set fails to list and takes the fallback
+            // The listing's own spelling, so a case-sensitive file system descends into the folder that is there.
+            dir = Path.Combine(dir, listing.Names.TryGetValue(name, out var onDisk) ? onDisk : name);   // a file under a dropped Files set fails to list and takes the fallback
         }
     }
 
@@ -645,7 +646,7 @@ public sealed class AssetResolver : IDisposable
         }
         if (!provedAbsent) return;                                     // not proved: a name listed that will not stat, or an ancestor that will not list
         // One level above the root, because the root's own folder can be the missing one.
-        var floor = (Path.GetDirectoryName(rootDir.TrimEnd('\\')) ?? "").Length;
+        var floor = (Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(rootDir)) ?? "").Length;
         var child = dir;
         for (var up = Path.GetDirectoryName(child); up is not null; child = up, up = Path.GetDirectoryName(up))
         {
@@ -739,7 +740,7 @@ public sealed class AssetResolver : IDisposable
     static bool WalkProvesAbsent(string rootDir, string dir, Func<string, bool> exists, Func<string, HashSet<string>?> list)
     {
         // One level above the root, because the root's own folder can be the unreadable one.
-        var floor = (Path.GetDirectoryName(rootDir.TrimEnd('\\')) ?? "").Length;
+        var floor = (Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(rootDir)) ?? "").Length;
         var child = dir;
         for (var up = Path.GetDirectoryName(child); up is not null; child = up, up = Path.GetDirectoryName(up))
         {

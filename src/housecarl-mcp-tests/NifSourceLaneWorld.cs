@@ -123,7 +123,7 @@ static class NifSourceLaneInstance
 
     public static void Loose(string modDir, string rel, byte[] bytes)
     {
-        var p = Path.Combine(modDir, rel);
+        var p = DiskPath.Combine(modDir, rel);
         Directory.CreateDirectory(Path.GetDirectoryName(p)!);
         File.WriteAllBytes(p, bytes);
     }

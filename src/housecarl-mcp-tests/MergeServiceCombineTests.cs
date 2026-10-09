@@ -220,7 +220,7 @@ public sealed class MergeServiceCombineTests
         var outDir = Path.GetDirectoryName(_w.Merged.OutputPath)!;
         var face = FaceGenPath.Both(M(0xA20)).ToList();
         Assert.Equal(2, face.Count);
-        Assert.All(face, x => Assert.True(File.Exists(Path.Combine(outDir, x.Item2)), x.Item2));
+        Assert.All(face, x => Assert.True(File.Exists(DiskPath.Combine(outDir, x.Item2)), x.Item2));
         Assert.Equal(2, _w.Merged.AssetRename?.FacegenFilesCarried);
     }
 

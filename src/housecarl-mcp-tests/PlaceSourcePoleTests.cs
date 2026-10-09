@@ -154,7 +154,7 @@ public sealed class PlaceSourcePoleTests : IClassFixture<PlaceSourcePoleWorld>
         Assert.True(r.Placed, r.Error);
         Assert.Equal(_w.LoserBytes, Bytes(o, destRel));
         Assert.StartsWith(FacegenRel, r.SourceDesc, StringComparison.OrdinalIgnoreCase);
-        Assert.False(File.Exists(Path.Combine(o.ModFolder!, FacegenRel)));
+        Assert.False(File.Exists(DiskPath.Combine(o.ModFolder!, FacegenRel)));
     }
 
     // Probe I5: "an absent Data-relative SOURCE is refused naming that path".

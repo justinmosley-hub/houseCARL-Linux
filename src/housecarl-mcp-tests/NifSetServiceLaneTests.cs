@@ -22,7 +22,7 @@ public sealed class NifSetServiceLaneTests
         using var w = new NifSetInstance(Mesh);
         var res = w.Svc.NifSet(MeshRel, Flags(), null, "FaceFix", null, inPlace: false, acknowledge: false);
         Assert.Null(res.Error);
-        var placed = Path.Combine(res.OutputModFolder!, MeshRel);
+        var placed = DiskPath.Combine(res.OutputModFolder!, MeshRel);
         Assert.Equal(0x800000Eu, ShapeOf(File.ReadAllBytes(placed), "GuardShape")!.Flags);
     }
 
