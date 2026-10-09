@@ -149,7 +149,7 @@ public static class Mo2LoadOrder
     static IEnumerable<(string fn, string full)> EnumeratePlugins(string dir)
     {
         if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) yield break;
-        var opts = new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = true };
+        var opts = new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = true, MatchCasing = MatchCasing.CaseInsensitive };
         IEnumerable<string> files;
         try { files = Directory.EnumerateFiles(dir, "*.es*", opts); }
         catch { yield break; }

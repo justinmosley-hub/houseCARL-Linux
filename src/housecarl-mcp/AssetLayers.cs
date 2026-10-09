@@ -514,7 +514,7 @@ internal sealed partial class AssetLayers
         {
             static bool LoaderIn(string dir) => Directory.Exists(dir)
                 && (File.Exists(Path.Combine(dir, "skse64_loader.exe"))
-                    || Directory.EnumerateFiles(dir, "skse64_*.dll").Any());
+                    || Directory.EnumerateFiles(dir, "skse64_*.dll", DiskPath.AnyCaseListing).Any());
             var gameDir = captured.Roots.DataDir.Length > 0 ? Path.GetDirectoryName(captured.Roots.DataDir.TrimEnd('\\', '/')) : null;
             loaderSeen = (gameDir is { Length: > 0 } && LoaderIn(gameDir))
                 || (captured.Roots.ModsDir.Length > 0 && enabledMods.Any(m => LoaderIn(Path.Combine(captured.Roots.ModsDir, m, "Root"))));

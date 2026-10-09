@@ -91,13 +91,13 @@ public static class LocalizedStrings
         if (folder is null) return Plain(LocalizedShape.Nowhere);
         var stem = Path.GetFileNameWithoutExtension(pluginPath);
 
-        var ownFolder = ReadStringsFolder(Path.Combine(folder, "Strings"), stem);
+        var ownFolder = ReadStringsFolder(DiskPath.Combine(folder, "Strings"), stem);
         var own = ownFolder.Languages;
         var unmatched = ownFolder.Unmatched;
         // The game-Data side stays two-answer on purpose: nothing rendered off it asserts an absence.
         var gameData = dataDir is null
             ? new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase)
-            : ReadStringsFolder(Path.Combine(dataDir, "Strings"), stem).Languages;
+            : ReadStringsFolder(DiskPath.Combine(dataDir, "Strings"), stem).Languages;
 
         // An archive the write cannot rewrite decides the shape whatever else is on disk; the folder's third answer is carried, not dropped.
         var (bsaPath, bsaUnreadable, folderUnlistable) = BsaEmbedding(folder, stem);
@@ -184,7 +184,7 @@ public static class LocalizedStrings
             // A folder that is not there is not a clean, empty read, and the redirect is only ever taken on a clean one.
             if (folder is null || !Directory.Exists(folder)) return true;
             var stem = Path.GetFileNameWithoutExtension(pluginPath);
-            var loose = ReadStringsFolder(Path.Combine(folder, "Strings"), stem);
+            var loose = ReadStringsFolder(DiskPath.Combine(folder, "Strings"), stem);
             if (loose.Read == StringsFolderRead.Unlistable) return true;
             if (loose.Languages.Count > 0) return true;
             // BsaEmbedding answers non-null both when the archive embeds this plugin's tables and when it could not be parsed.
@@ -207,7 +207,7 @@ public static class LocalizedStrings
     {
         var folder = Path.GetDirectoryName(pluginPath);
         if (folder is null) return Array.Empty<string>();
-        return TableFilesIn(Path.Combine(folder, "Strings"), Path.GetFileNameWithoutExtension(pluginPath));
+        return TableFilesIn(DiskPath.Combine(folder, "Strings"), Path.GetFileNameWithoutExtension(pluginPath));
     }
 
     /// <summary>The table files in <paramref name="stringsDir"/> that belong to the plugin named <paramref name="stem"/>, never a neighbour's.</summary>

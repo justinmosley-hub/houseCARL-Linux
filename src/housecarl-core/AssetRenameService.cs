@@ -178,7 +178,7 @@ public static class AssetRenameService
             return new SeqRegenOutcome(built.Quests.Count, false, null,
                 new[] { $"'{Path.GetFileName(pPrimePath)}' has {built.Quests.Count} start-game-enabled quest(s) but no .seq — they likely weren't starting even before compaction; run {ToolNames.WriteSeq} on the compacted plugin to add one." });
 
-        var dest = Path.Combine(outDir, "SEQ", Path.GetFileNameWithoutExtension(pPrimePath) + ".seq");
+        var dest = DiskPath.Combine(outDir, @"SEQ\" + Path.GetFileNameWithoutExtension(pPrimePath) + ".seq");
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);       // AtomicFile.WriteAllBytes does NOT create the dir

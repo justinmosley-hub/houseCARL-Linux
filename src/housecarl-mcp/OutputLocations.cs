@@ -66,7 +66,7 @@ internal sealed class OutputLocations
     public RiderFolder ResolveCompiledScriptFolder(string? patchName, string? into)
     {
         var f = ResolvePatchModFolder(patchName, into, "houseCARL_Scripts", new RiderNaming("patch", Noun: ".pex"));
-        var scripts = Path.Combine(f.ModFolder, "Scripts");
+        var scripts = DiskPath.Combine(f.ModFolder, "Scripts");
         Directory.CreateDirectory(scripts);
         return f with { OutputDir = scripts };
     }
@@ -187,7 +187,7 @@ internal sealed class OutputLocations
     public RiderFolder ResolveDecompiledSourceFolder(string? patchName, string? into)
     {
         var f = ResolvePatchModFolder(patchName, into, "houseCARL_Scripts", new RiderNaming("patch", Noun: ".psc"));
-        var src = Path.Combine(f.ModFolder, "Source", "Scripts");
+        var src = DiskPath.Combine(f.ModFolder, @"Source\Scripts");
         Directory.CreateDirectory(src);
         return f with { OutputDir = src };
     }
@@ -232,7 +232,7 @@ internal sealed class OutputLocations
     RiderFolder ResolveSeqFolder(OutputRoots snapshot, string? patchName, string? into)
     {
         var f = ResolvePatchModFolder(snapshot, patchName, into, "houseCARL_SEQ", new RiderNaming("patch", Noun: ".seq"));
-        var seq = Path.Combine(f.ModFolder, "SEQ");
+        var seq = DiskPath.Combine(f.ModFolder, "SEQ");
         Directory.CreateDirectory(seq);
         return f with { OutputDir = seq };
     }

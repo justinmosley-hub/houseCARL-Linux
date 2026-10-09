@@ -660,7 +660,7 @@ internal sealed partial class RecordWrites
             }
             // Only when the view never resolved does this fall back to a loose per-donor-folder check.
             bool anyDonorSeq = seqGate ?? donorInfos.Any(d =>
-                File.Exists(Path.Combine(Path.GetDirectoryName(d.Path)!, "SEQ", Path.GetFileNameWithoutExtension(d.Name) + ".seq")));
+                File.Exists(DiskPath.Combine(Path.GetDirectoryName(d.Path)!, @"SEQ\" + Path.GetFileNameWithoutExtension(d.Name) + ".seq")));
 
             // ---- SEQ, refresh-only, off the merged plugin: rebuilt when any donor shipped a .seq, because all their
             //      quests now live in the output. A donor with SGE quests but no shipped .seq gets a named advisory. ----

@@ -14,6 +14,17 @@ public static class DiskPath
         AttributesToSkip = 0,
     };
 
+    /// <summary>The options of <c>Directory.EnumerateFiles(dir, pattern)</c> (<see cref="EnumerationOptions"/>.Compatible),
+    /// matching names without regard to case: game files ship as <c>Mod.ESP</c> as often as <c>mod.esp</c>, and Linux
+    /// would otherwise list only the casing the pattern spells.</summary>
+    public static readonly EnumerationOptions AnyCaseListing = new()
+    {
+        MatchType = MatchType.Win32,
+        MatchCasing = MatchCasing.CaseInsensitive,
+        AttributesToSkip = 0,
+        IgnoreInaccessible = false,
+    };
+
     /// <summary><paramref name="root"/> joined with <paramref name="relPath"/>. Windows: exactly
     /// <see cref="Path.Combine(string, string)"/>. Elsewhere: each segment takes the casing found on disk, and the
     /// given spelling from the first segment that does not exist yet.</summary>

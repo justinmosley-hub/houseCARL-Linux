@@ -49,7 +49,7 @@ public static class PapyrusClassParents
             {
                 // The enumeration throws lazily, so the listing's own failure is caught here with the reads.
                 foreach (var f in Directory.EnumerateFiles(root, "*.psc",
-                             new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
+                             new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, MatchCasing = MatchCasing.CaseInsensitive }))
                 {
                     seen++;
                     try
@@ -96,7 +96,7 @@ public static class PapyrusClassParents
         try
         {
             // The enumeration throws lazily, so the listing's own failure is caught here with the reads.
-            foreach (var f in Directory.EnumerateFiles(folder, "*.pex"))
+            foreach (var f in Directory.EnumerateFiles(folder, "*.pex", DiskPath.AnyCaseListing))
             {
                 seen++;
                 try { added += AddFromPex(edges, PexFile.CreateFromFile(f, GameCategory.Skyrim)); }

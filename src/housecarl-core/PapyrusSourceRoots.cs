@@ -55,7 +55,7 @@ public static class PapyrusSourceRoots
         try
         {
             if (!Directory.Exists(dir)) return false;
-            foreach (var f in Directory.EnumerateFiles(dir, "*.psc"))
+            foreach (var f in Directory.EnumerateFiles(dir, "*.psc", DiskPath.AnyCaseListing))
                 if (f.EndsWith(".psc", StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }

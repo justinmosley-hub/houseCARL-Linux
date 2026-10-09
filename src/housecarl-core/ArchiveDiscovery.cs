@@ -77,7 +77,7 @@ public static class ArchiveDiscovery
     static IEnumerable<(string fn, string full)> EnumerateArchives(string dir)
     {
         if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) yield break;
-        var opts = new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = true };
+        var opts = new EnumerationOptions { RecurseSubdirectories = false, IgnoreInaccessible = true, MatchCasing = MatchCasing.CaseInsensitive };
         IEnumerable<string> files;
         try { files = Directory.EnumerateFiles(dir, "*.bsa", opts); }
         catch { yield break; }
@@ -92,8 +92,8 @@ public static class ArchiveDiscovery
     static IReadOnlyList<string> ReadBaseArchiveNames(string profileDir, string gamePath, List<string> warnings)
     {
         var candidates = new List<string>(2);
-        if (profileDir.Length > 0) candidates.Add(Path.Combine(profileDir, "Skyrim.ini"));
-        if (gamePath.Length > 0) candidates.Add(Path.Combine(gamePath, "Skyrim.ini"));
+        if (profileDir.Length > 0) candidates.Add(DiskPath.Combine(profileDir, "Skyrim.ini"));
+        if (gamePath.Length > 0) candidates.Add(DiskPath.Combine(gamePath, "Skyrim.ini"));
 
         foreach (var ini in candidates)
         {

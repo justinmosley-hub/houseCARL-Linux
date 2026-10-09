@@ -119,7 +119,7 @@ public static class OffOrderAssetSource
     static (IReadOnlyList<string> Archives, bool FolderMissing, string? Cause) RootArchives(string dir)
     {
         List<string> bsas;
-        try { bsas = Directory.EnumerateFiles(dir, "*.bsa", SearchOption.TopDirectoryOnly).ToList(); }
+        try { bsas = Directory.EnumerateFiles(dir, "*.bsa", DiskPath.AnyCaseListing).ToList(); }
         catch (DirectoryNotFoundException) { return (Array.Empty<string>(), true, null); }
         catch (Exception ex) { return (Array.Empty<string>(), false, Because(ex)); }
         bsas.Sort((a, b) => string.Compare(Path.GetFileName(a), Path.GetFileName(b), StringComparison.OrdinalIgnoreCase));

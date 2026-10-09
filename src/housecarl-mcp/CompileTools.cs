@@ -211,7 +211,7 @@ public static class CompileTools
     {
         var gameRoot = Path.GetDirectoryName(Path.GetDirectoryName(compilerExe));
         if (gameRoot is null) return null;
-        var vanilla = Path.Combine(gameRoot, "Data", "Source", "Scripts");
+        var vanilla = DiskPath.Combine(gameRoot, @"Data\Source\Scripts");
         return Directory.Exists(vanilla) ? vanilla : null;
     }
 

@@ -18,6 +18,7 @@ gives both for free; Linux gives neither. `DiskPath` turns a game path into a re
 - A root folder handed in from configuration (instance folder, mod folder) is a real disk path already and is joined with `Path.Combine`.
 - A game path never starts with a drive letter, on any OS: `GamePath.HasDriveLetter` refuses `C:\…` where `Path.IsPathRooted` would only on Windows.
 - "Is this disk path under that folder?" builds its prefix with `Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar`, never `root + "\\"`.
+- A folder listed for game files by pattern (`*.esp`, `*.bsa`, `*.psc`, `*.pex`, `skse64_*.dll`) matches without regard to case: `MatchCasing.CaseInsensitive`, or `DiskPath.AnyCaseListing` where the call used .NET's default options. A game-named folder or file (`Strings`, `SEQ`, `Scripts`, `Source\Scripts`, `Skyrim.ini`) is joined with `DiskPath.Combine`, so a write reuses a folder the mod already has in another casing.
 - Matching a disk path's tail against a game path is done segment by segment, ignoring case (`Mo2ModMeta.ModRootForLooseFile`), never with `EndsWith` on the two strings.
 
 ## Pinned by
@@ -28,6 +29,7 @@ gives both for free; Linux gives neither. `DiskPath` turns a game path into a re
 - `PapyrusSourceRootsDiscoverTests.ALayoutInOtherCasingIsFound` — `source/scripts` shipped in lower case is found.
 - `AssetResolverTests.ADriveRootedOrEscapingPathIsRejected` — `C:\Windows\evil.nif` is refused on Linux too.
 - `NativePairingProvenanceTests` — a file under the mods, overwrite or Data folder is placed in that layer.
+- `OtherCasingOnDiskTests` — a plugin shipped as `.ESP`, an upper-case `.BSA`, a lower-case `skyrim.ini`, a lower-case `strings\` folder and an upper-case `.PSC` are all found.
 - `Mo2ModMetaReadTests.TheModRootOfALooseFileIsFoundAcrossSeparatorsAndCasing`; `SkseInventoryNameTests` — a nested SKSE config is listed by its file name.
 
 ## Where

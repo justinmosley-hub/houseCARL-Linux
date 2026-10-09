@@ -324,7 +324,7 @@ public sealed class LoadOrderResolver : IDisposable
             var prm = PluginTextEncoding.ReadWith(path, new StringsReadParameters
             {
                 BsaFolderOverride = dataDir,
-                StringsFolderOverride = Path.Combine(dataDir, "Strings"),
+                StringsFolderOverride = DiskPath.Combine(dataDir, "Strings"),
             });
             return SkyrimMod.CreateFromBinaryOverlay(path, SkyrimRelease.SkyrimSE, prm);
         }

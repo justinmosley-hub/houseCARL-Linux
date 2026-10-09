@@ -29,7 +29,7 @@ public static class PapyrusDependencyFilter
         foreach (var folder in seedFolders.Concat(candidateFolders))
         {
             IEnumerable<string> files;
-            try { files = Directory.EnumerateFiles(folder, "*.psc"); }
+            try { files = Directory.EnumerateFiles(folder, "*.psc", DiskPath.AnyCaseListing); }
             catch { continue; }
             try
             {
