@@ -88,7 +88,7 @@ public sealed class PlaceCoreTests : IDisposable
     // and "overwrite preserves the destination's creation time — File.Replace, not File.Move". On a host whose file
     // system tunneling keeps the creation time through File.Move too, the last one cannot be told apart and stops, as
     // the probe did.
-    [Fact]
+    [WindowsFact("Linux cannot carry a file's creation time across a replace")]
     public void AnOverwriteWritesTheNewBytesAndKeepsTheCreationTime()
     {
         var oldCreate = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);

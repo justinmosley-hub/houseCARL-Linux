@@ -25,5 +25,27 @@ public sealed class HeldOpen : IDisposable
         }
     }
 
-    public void Dispose() => _stream.Dispose();
+    public void Dispose()
+    {
+        if (_folder is not null) File.SetUnixFileMode(_folder, _folderMode);
+        _stream.Dispose();
+    }
+
+    string? _folder;
+    UnixFileMode _folderMode;
+
+    /// <summary>Hold <paramref name="path"/> so that REPLACING or deleting it fails, as another program holding it does on
+    /// Windows. Elsewhere an open file can still be replaced or deleted, so its folder is also made unwritable until
+    /// disposed — which also refuses a new file beside it (docs/linux-and-amethyst.md).</summary>
+    public static HeldOpen HoldAgainstReplace(string path, FileShare share = FileShare.None, FileAccess access = FileAccess.Read)
+    {
+        var held = new HeldOpen(new FileStream(path, FileMode.Open, access, share));
+        if (!OperatingSystem.IsWindows())
+        {
+            held._folder = Path.GetDirectoryName(Path.GetFullPath(path))!;
+            held._folderMode = File.GetUnixFileMode(held._folder);
+            File.SetUnixFileMode(held._folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+        return held;
+    }
 }

@@ -196,7 +196,7 @@ public sealed class PlaceServiceLaneTests
     // "overwrite via the SERVICE yields the NEW bytes byte-exact, not the stale prior", and "the service place
     // preserves the dest creation time — routes through AtomicFile (File.Replace), not File.Move" (stops on a
     // tunneling host, as the probe did).
-    [Fact]
+    [WindowsFact("Linux cannot carry a file's creation time across a replace")]
     public void ASecondPlaceIntoTheSameFolderWritesTheNewBytesAndKeepsTheCreationTime()
     {
         using var p = new PlaceInstance();

@@ -139,7 +139,7 @@ public sealed class CompactSeqRegenTests : IDisposable
         var (mods, inst) = Instance("warn", "SeqWarn", m => AddQuest(m, 0x900, "HcSeqQ", Quest.Flag.StartGameEnabled));
         var (seq, _) = PlantSourceSeq(mods, "SeqWarn", 0x900);
 
-        using (new FileStream(seq, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        using (HeldOpen.HoldAgainstReplace(seq, FileShare.None, FileAccess.ReadWrite))
         {
             using var svc = Service(inst);
             var o = svc.CompactPlugin("SeqWarn.esp", inPlace: true, acknowledge: true);

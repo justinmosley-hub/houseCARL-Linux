@@ -192,12 +192,11 @@ public static class Mo2LoadOrder
         return names;
     }
 
-    /// <summary>Read one profile text file, naming a LOCKED file as the transient it is; only the Win32 sharing and lock violations become <see cref="ProfileUnreadableException"/>, and every other fault keeps its own error.</summary>
+    /// <summary>Read one profile text file, naming a LOCKED file as the transient it is; only a file another process holds (<see cref="FileInUse"/>) becomes <see cref="ProfileUnreadableException"/>, and every other fault keeps its own error.</summary>
     static string[] ReadProfileLines(string path)
     {
         try { return File.ReadAllLines(path); }
-        catch (IOException ex) when (ex is not (FileNotFoundException or DirectoryNotFoundException)
-                                     && (ex.HResult & 0xFFFF) is 32 or 33)   // ERROR_SHARING_VIOLATION / ERROR_LOCK_VIOLATION
+        catch (IOException ex) when (FileInUse.Is(ex))
         {
             throw new ProfileUnreadableException(path, ex);
         }

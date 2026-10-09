@@ -66,7 +66,7 @@ public sealed class AtomicCommitGuardTests : IDisposable
     // Probe B: "destination creation time preserved - File.Replace, not File.Move(overwrite)". On a host whose file
     // system tunneling keeps the creation time through File.Move too, the two cannot be told apart; the control
     // detects that and the test stops there, as the probe did.
-    [Fact]
+    [WindowsFact("Linux cannot carry a file's creation time across a replace")]
     public void AnOverwriteKeepsTheTargetsCreationTime()
     {
         var ctlStaged = At("ctl.tmp");
@@ -115,8 +115,9 @@ public sealed class AtomicCommitGuardTests : IDisposable
         File.WriteAllBytes(final, prior);
         File.WriteAllBytes(staged, new byte[] { 8, 8 });
 
-        using (new FileStream(final, FileMode.Open, FileAccess.Read, FileShare.None))
-            Assert.ThrowsAny<IOException>(() => AtomicFile.Commit(staged, final));
+        // IOException on Windows; a refused replace elsewhere is UnauthorizedAccessException. Callers catch both.
+        using (HeldOpen.HoldAgainstReplace(final))
+            Assert.True(Assert.ThrowsAny<Exception>(() => AtomicFile.Commit(staged, final)) is IOException or UnauthorizedAccessException);
 
         Assert.Equal(prior, File.ReadAllBytes(final));
     }

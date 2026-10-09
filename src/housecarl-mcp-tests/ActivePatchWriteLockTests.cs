@@ -20,7 +20,7 @@ public sealed class ActivePatchWriteLockTests : IDisposable
     public void Dispose() { try { Directory.Delete(_dir, true); } catch { /* temp cleanup best-effort */ } }
 
     // Probe arm CONTROL: a direct serialize onto a target whose overlay is held fails, so the lock still reproduces here.
-    [Fact]
+    [WindowsFact("only Windows refuses to replace a file another handle has memory-mapped")]
     public void ADirectSerializeOntoAMappedTargetFails()
     {
         var key = new ModKey("HcWriteLockGuard", ModType.Plugin);

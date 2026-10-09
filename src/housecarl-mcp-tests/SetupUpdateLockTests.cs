@@ -81,7 +81,7 @@ public sealed class SetupUpdateLockTests
     }
 
     // T4: a held sibling DLL (exe free) is caught mid-copy as ServerInUse, not thrown, and not reported as pre-flight.
-    [Fact]
+    [WindowsFact("the Windows installer's held-DLL check; an open file does not block replacing it elsewhere")]
     public void AHeldDllIsReportedMidCopyAsServerInUse()
     {
         using var box = new SetupInstallerSandbox();

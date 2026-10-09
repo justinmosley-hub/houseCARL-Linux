@@ -3,7 +3,8 @@ using Xunit;
 
 namespace HousecarlMcpTests;
 
-/// <summary>The pack contract with a real failing packer: a copy of Windows' where.exe stands in for BSArch, so the
+/// <summary>The pack contract with a real failing packer: a copy of Windows' where.exe (elsewhere, a shell script that
+/// exits 2) stands in for BSArch, so the
 /// pack shells out, the run errors, exits non-zero and writes nothing. A stuck stale scratch refuses before the run,
 /// a failing run never moves a stale scratch over the target, and an unknown format token maps to no flag.</summary>
 [Trait("tier", "unit")]
@@ -22,7 +23,12 @@ public sealed class BsaPackContractTests : IDisposable
         _root = Path.Combine(Path.GetTempPath(), "hc-bsa-contract-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         _stub = Path.Combine(_root, "bsarch.exe");
-        File.Copy(Path.Combine(Environment.SystemDirectory, "where.exe"), _stub);
+        if (OperatingSystem.IsWindows()) File.Copy(Path.Combine(Environment.SystemDirectory, "where.exe"), _stub);
+        else
+        {
+            File.WriteAllText(_stub, "#!/bin/sh\nexit 2\n");
+            File.SetUnixFileMode(_stub, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
         _packDir = Path.Combine(_root, "pack");
         Directory.CreateDirectory(_packDir);
         _target = Path.Combine(_packDir, "Out.bsa");
@@ -38,7 +44,7 @@ public sealed class BsaPackContractTests : IDisposable
     public void AStuckStaleScratchRefusesBeforeRunningAndLeavesThePriorArchive()
     {
         BsaPackResult rp;
-        using (File.Open(_stale, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (HeldOpen.HoldAgainstReplace(_stale))
             rp = BsaArchive.Pack(_stub, _packDir, _target, "-sse", compress: false, timeoutMs: 30_000);
 
         Assert.False(rp.Success);

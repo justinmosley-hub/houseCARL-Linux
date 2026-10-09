@@ -117,7 +117,7 @@ public sealed class NifSetServiceLaneTests
     /// <summary>Runs the #378 arm: with the loose mesh held open for reading, one call without acknowledge and one with.</summary>
     static (bool GateFirst, NifSetResult Blocked, bool Spent, bool Untouched) HeldTarget(NifSetInstance w)
     {
-        using var hold = new FileStream(w.LoosePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var hold = HeldOpen.HoldAgainstReplace(w.LoosePath, FileShare.Read);
         var gateFirst = w.Svc.NifSet(MeshRel, Flags(), null, null, null, inPlace: true, acknowledge: false).NeedsAcknowledge;
         var blocked = w.Svc.NifSet(MeshRel, Flags(), null, null, null, inPlace: true, acknowledge: true);
         var spent = new UserConfigStore(w.StorePath).IsInPlaceAcknowledged(w.LoosePath);
