@@ -1,4 +1,24 @@
-# houseCARL
+# houseCARL — Linux / Amethyst fork
+
+> **This is a modified version of [houseCARL](https://github.com/Avick3110/houseCARL) by Avick3110**, changed by
+> justinmosley-hub starting 2026-10-09 (GPL-3.0 §5). It runs houseCARL on **Linux** and is adding support for the
+> [Amethyst Mod Manager](https://github.com/ChrisDKN/Amethyst-Mod-Manager) beside Mod Organizer 2. On Windows it
+> behaves like upstream. For the official Windows release, use upstream.
+>
+> **Status: in development, not released.** What works today:
+>
+> - The server builds and runs on Linux (.NET 9). Game paths written the Windows way (`meshes\armor\x.nif`) are
+>   found on case-sensitive Linux disks (`DiskPath` / `GamePath`).
+> - Several upstream bugs that showed up on Linux are fixed for every OS: Papyrus source folders, SKSE and
+>   SkyPatcher names, and JSON responses that now match on Windows and Linux.
+> - Every text and JSON response now keeps to its `max_chars` limit (upstream #1016 and more).
+>
+> Not done yet: reading an Amethyst setup (next), writing into Amethyst, Papyrus compile through Wine, and a Linux
+> release package. About 117 tests that only make sense on Windows still fail on Linux and are being made per-OS.
+>
+> What changed and why, written for anyone who knows houseCARL and Windows but not Linux:
+> [docs/linux-and-amethyst.md](docs/linux-and-amethyst.md). The rest of this README is upstream's and describes
+> houseCARL itself.
 
 houseCARL is an MCP server that exposes a Skyrim Special Edition load order at the data layer. It reads a Mod Organizer 2 instance's profile and presents every plugin record, every Data-relative asset, the compiled Papyrus, the SKSE plugin layer and the SkyPatcher INI layer to an AI assistant as a set of tools. It is built on [Mutagen](https://github.com/Mutagen-Modding/Mutagen). The host is [Claude Code](https://claude.com/claude-code) or OpenAI Codex.
 
@@ -152,6 +172,20 @@ Dialogue and facegen are not skills. Their tools carry the bookkeeping, and the 
 - [Mod Organizer 2](https://www.modorganizer.org/) with a profile. MO2 does not need to be running.
 - Claude Code v2.1.143 or newer (the terminal CLI, or the Claude desktop app's Code tab), or OpenAI Codex. houseCARL runs inside the host.
 
+## Building on Linux (this fork)
+
+```
+# Arch / CachyOS; other distros: Microsoft's .NET 9 packages or dotnet-install.sh
+sudo pacman -S dotnet-sdk-9.0 aspnet-runtime-9.0
+
+git clone https://github.com/justinmosley-hub/houseCARL-Linux.git
+cd houseCARL-Linux
+dotnet build housecarl.sln -c Release
+dotnet test src/housecarl-mcp-tests -c Release --no-build
+```
+
+There is no Linux release package yet. More detail is in [docs/linux-and-amethyst.md](docs/linux-and-amethyst.md).
+
 ## Install
 
 ### From a release
@@ -269,7 +303,11 @@ Read [CLAUDE.md](CLAUDE.md) before changing anything, then the note in `docs/arc
 
 ## Licence
 
-GPL-3.0-only. See [LICENSE](LICENSE). Required by Mutagen (GPL-3.0-only, no linking exception), which houseCARL is built on and bundles. Third-party components and licences are listed in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) with corresponding-source pointers.
+GPL-3.0-only. See [LICENSE](LICENSE).
+
+This fork is a modified version of houseCARL by Avick3110 and is distributed under the same licence, GPL-3.0-only;
+the changes are copyright their authors and licensed the same way. The full list of changes is the git history
+on this repository. The original copyright and licence notices are kept unchanged. Required by Mutagen (GPL-3.0-only, no linking exception), which houseCARL is built on and bundles. Third-party components and licences are listed in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) with corresponding-source pointers.
 
 ## Credits
 
@@ -277,3 +315,11 @@ GPL-3.0-only. See [LICENSE](LICENSE). Required by Mutagen (GPL-3.0-only, no link
 - [papyrus-index](https://github.com/BellCubeDev/papyrus-index), BellCube. Source corpus for `papyrus-reference`.
 - Zzyxzz (SkyPatcher) and powerofthree (SPID, KID). Public documentation the distributor grammars were drawn from.
 - DrHeisen. The `open-animation-replacer` skill, and two earlier skills since retired.
+
+This fork also credits:
+
+- [Avick3110/houseCARL](https://github.com/Avick3110/houseCARL), the project this fork is built from.
+- [ni1by2/houseCARL-Amethyst](https://github.com/ni1by2/houseCARL-Amethyst), an earlier Amethyst port of houseCARL
+  1.8. Its Amethyst safety rules and its finding that Amethyst moved to a SQLite file database shape this fork's
+  Amethyst backend; see [docs/linux-and-amethyst.md](docs/linux-and-amethyst.md).
+- [Amethyst Mod Manager](https://github.com/ChrisDKN/Amethyst-Mod-Manager), ChrisDKN.

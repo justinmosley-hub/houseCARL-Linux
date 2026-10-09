@@ -5,8 +5,9 @@ This fork runs houseCARL on Linux and reads a load order from
 written for someone who knows houseCARL, C# and Windows, and has not used Linux or Amethyst. Nothing
 here changes how houseCARL behaves on Windows.
 
-Status: the server builds and the test suite runs on Linux; game-path handling is done. The Amethyst
-backend, writes into Amethyst, and Papyrus compile through Wine are next, in that order.
+Status: the server builds and the test suite runs on Linux; game-path handling is done, and every render now keeps
+to `max_chars`. About 117 Windows-only tests are still to be made per-OS. The Amethyst backend, writes into
+Amethyst, and Papyrus compile through Wine are next, in that order.
 
 ## What changed, and where
 
@@ -17,6 +18,34 @@ backend, writes into Amethyst, and Papyrus compile through Wine are next, in tha
 | json written with `\n` on every OS (`JsonWire.Opts`) | .NET indents with the OS line break by default, so Windows and Linux returned different documents | [`architecture/json-wire.md`](architecture/json-wire.md) "One document, whatever the OS" |
 | json caveats and asset rows measured before they are written | The item that crossed `max_chars` was written whole; it showed on Linux because line-break width moved where items end | [`architecture/json-wire.md`](architecture/json-wire.md), `AssetSelectTests.NoCaveatOrRowPastTheFirstCrossesTheCeilingAtAnyCap` |
 | Every text and json write render bounded by `max_chars` (`BatchRender.AppendSections`, `RowRoom`) | Not a Linux issue: #1016's three text renders and the six json write renders answered past their cap whenever they cut | [`architecture/render-budget.md`](architecture/render-budget.md) |
+
+## Amethyst: the rules the backend follows
+
+The Amethyst backend is not written yet. These rules bind it, and most come from an earlier port,
+[ni1by2/houseCARL-Amethyst](https://github.com/ni1by2/houseCARL-Amethyst) (GPL-3.0, July 2026, built on houseCARL
+1.8). Their work is credited here and in the README. We adopt their findings, not their code: that fork predates
+houseCARL 2.0.
+
+1. **Never infer winners from the deployed game `Data/` folder.** Read the active profile and staging state from
+   Amethyst. A deployed `Data/` holds Amethyst's links into staging, so it is never treated as vanilla.
+2. **Fail loud on bad Amethyst state.** A missing, malformed or unknown-version input is refused by name. There is
+   no silent fallback to scanning `Data/`.
+3. **Writes go to staging, never to deployed `Data/`.** A new patch mod goes into Amethyst staging, and the user
+   refreshes, enables and deploys it in Amethyst.
+4. **In-place edits** keep upstream's per-plugin consent, also need an explicit redeploy confirmation, write to
+   staging only, and stay pending until a later deploy is verified.
+5. **Check the real deploy, not the requested mode.** Amethyst can fall back from hardlinks to symlinks or copies,
+   so the backend checks each file's actual link and identity (inode).
+6. **Hardlink deployment is the first supported mode.** Symlink and copy are smoke-tested; Amethyst's VFS mode
+   comes later.
+7. **Both staging layouts** are supported: shared staging and profile-specific staging. A `*`-locked mod is enabled.
+8. **No Skyrim game data in CI.** Testing against a real game uses a disposable profile, with backups first.
+
+**Amethyst's file database.** Current Amethyst tracks which mod provides each file in a versioned SQLite database,
+the *filegraph* (`native/amethyst_filegraph/src/schema.rs` and `src/Utils/filegraph/service.py` in Amethyst), not
+in `filemap.txt` as it used to. Its tables include `profiles` (with a `generation` counter), `winners` and
+`deployed_entries`. The backend reads it read-only, checks the schema version and the generation, and refuses a
+stale or partial view. This finding is also ni1by2's (their hand-off note of 2026-10-02).
 
 ## Windows → Linux, for this codebase
 
