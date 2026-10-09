@@ -1,5 +1,3 @@
-using System.Security.AccessControl;
-using System.Security.Principal;
 using HousecarlGenerator;
 using HousecarlMcp;
 using Mutagen.Bethesda.Plugins;
@@ -62,12 +60,7 @@ public sealed class LocalizedModFolderUnreadableTests : IDisposable
     /// Returns false when the ACE did not bite on this host, so the caller can say so rather than passing.</summary>
     bool WithDeniedListing(Action body)
     {
-        if (!OperatingSystem.IsWindows()) return false;
-        var dir = new DirectoryInfo(_modDir);
-        var acl = dir.GetAccessControl();
-        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().Name, FileSystemRights.ListDirectory, AccessControlType.Deny);
-        acl.AddAccessRule(deny);
-        dir.SetAccessControl(acl);
+        if (!DenyAce.TryDenyListing(_modDir)) return false;
         try
         {
             // VERIFIED to bite, and verified to leave the plugin readable — a deny that took the whole folder down
@@ -78,14 +71,10 @@ public sealed class LocalizedModFolderUnreadableTests : IDisposable
             body();
             return true;
         }
-        finally
-        {
-            acl.RemoveAccessRule(deny);
-            dir.SetAccessControl(acl);
-        }
+        finally { DenyAce.UndenyListing(_modDir); }
     }
 
-    [WindowsFact("the deny ACE that makes a folder unlistable")]
+    [Fact]
     public void AnUnlistableModFolderIsNotAFolderFoundEmpty()
     {
 

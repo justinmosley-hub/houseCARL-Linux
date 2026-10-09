@@ -1,5 +1,3 @@
-using System.Security.AccessControl;
-using System.Security.Principal;
 using HousecarlGenerator;
 using HousecarlMcp;
 
@@ -122,32 +120,11 @@ public sealed class PlaceInstance : IDisposable
 
     /// <summary>Deny only the list-directory right on one folder, without inheritance, so a path under it still probes
     /// as absent while the folder's own enumeration fails. False means the deny did not bite and was taken back off.</summary>
-    public static bool TryDenyList(string dir)
-    {
-        try
-        {
-            var di = new DirectoryInfo(dir);
-            var sec = di.GetAccessControl();
-            sec.AddAccessRule(new FileSystemAccessRule(WindowsIdentity.GetCurrent().Name, FileSystemRights.ListDirectory,
-                InheritanceFlags.None, PropagationFlags.None, AccessControlType.Deny));
-            di.SetAccessControl(sec);
-            try { Directory.EnumerateFiles(dir, "*.bsa").ToList(); } catch (UnauthorizedAccessException) { return true; } catch { }
-            UndenyList(dir);
-            return false;
-        }
-        catch { return false; }
-    }
+    public static bool TryDenyList(string dir) => DenyAce.TryDenyListing(dir);
 
     public static void UndenyList(string dir)
     {
-        try
-        {
-            var di = new DirectoryInfo(dir);
-            var sec = di.GetAccessControl();
-            sec.RemoveAccessRuleAll(new FileSystemAccessRule(WindowsIdentity.GetCurrent().Name, FileSystemRights.ListDirectory,
-                AccessControlType.Deny));
-            di.SetAccessControl(sec);
-        }
+        try { DenyAce.UndenyListing(dir); }
         catch { /* best effort; the temp tree goes either way */ }
     }
 

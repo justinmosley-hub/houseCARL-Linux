@@ -1,5 +1,3 @@
-using System.Security.AccessControl;
-using System.Security.Principal;
 using HousecarlCore;
 using HousecarlGenerator;
 using Xunit;
@@ -122,15 +120,12 @@ public sealed class LocalizedStringsSourceTests : IDisposable
     /// plugin — the same fact as an unlistable <c>Strings\</c> folder, and it takes the same answer: keep the
     /// unchanged folder-adjacent open. Swallowed as "no archives", the gate answers false and redirects a plugin
     /// whose tables may be sitting right there, which is the failure #369 was about.</summary>
-    [WindowsFact("the deny ACE that makes a folder unlistable")]
+    [Fact]
     public void AModFolderThatCannotBeListedKeepsTheUnchangedOpen()
     {
         var plugin = Folder("folder-unlistable");
         var dir = new DirectoryInfo(Path.GetDirectoryName(plugin)!);
-        var acl = dir.GetAccessControl();
-        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().Name, FileSystemRights.ListDirectory, AccessControlType.Deny);
-        acl.AddAccessRule(deny);
-        dir.SetAccessControl(acl);
+        Assert.True(DenyAce.TryDenyListing(dir.FullName), "the listing deny did not bite on this host");
         try
         {
             // The fixture is VERIFIED to bite: without this the arm passes on a folder that lists fine, which is
@@ -138,10 +133,6 @@ public sealed class LocalizedStringsSourceTests : IDisposable
             Assert.ThrowsAny<Exception>(() => Directory.GetFiles(dir.FullName, "*.bsa"));
             Assert.True(LocalizedStrings.OwnFolderCarriesStringsFor(plugin));
         }
-        finally
-        {
-            acl.RemoveAccessRule(deny);
-            dir.SetAccessControl(acl);
-        }
+        finally { DenyAce.UndenyListing(dir.FullName); }
     }
 }

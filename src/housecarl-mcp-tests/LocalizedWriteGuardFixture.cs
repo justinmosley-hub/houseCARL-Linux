@@ -1,6 +1,4 @@
-using System.Security.AccessControl;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Strings;
@@ -232,18 +230,9 @@ public sealed class LocalizedWriteGuardFixture : IDisposable
     /// <summary>Deny LISTING (not traverse) on <paramref name="dir"/> until disposed; false when the deny did not bite on this host.</summary>
     public bool DenyListing(string dir)
     {
-        if (!OperatingSystem.IsWindows()) return false;
-        var di = new DirectoryInfo(dir);
-        var sec = di.GetAccessControl();
-        sec.AddAccessRule(new FileSystemAccessRule(WindowsIdentity.GetCurrent().Name, FileSystemRights.ListDirectory,
-                                                   AccessControlType.Deny));
-        di.SetAccessControl(sec);
+        if (!DenyAce.TryDenyListing(dir)) return false;
         _denied.Add(dir);
-        if (!Directory.Exists(dir)) return false;
-        try { Directory.EnumerateFiles(dir).ToList(); }
-        catch (UnauthorizedAccessException) { return true; }
-        catch (IOException) { return true; }
-        return false;
+        return true;
     }
 
     /// <summary>Lift a deny <see cref="DenyListing"/> added.</summary>
@@ -253,13 +242,5 @@ public sealed class LocalizedWriteGuardFixture : IDisposable
         _denied.Remove(dir);
     }
 
-    static void Undeny(string dir)
-    {
-        if (!OperatingSystem.IsWindows()) return;
-        var di = new DirectoryInfo(dir);
-        var sec = di.GetAccessControl();
-        sec.RemoveAccessRuleAll(new FileSystemAccessRule(WindowsIdentity.GetCurrent().Name, FileSystemRights.ListDirectory,
-                                                         AccessControlType.Deny));
-        di.SetAccessControl(sec);
-    }
+    static void Undeny(string dir) => DenyAce.UndenyListing(dir);
 }

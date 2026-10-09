@@ -1,5 +1,3 @@
-using System.Security.AccessControl;
-using System.Security.Principal;
 using HousecarlCore;
 using HousecarlMcp;
 using Xunit;
@@ -184,7 +182,7 @@ public sealed class BsaPackCountTests : IDisposable
     }
 
     /// <summary>A subfolder the process cannot list throws out of the scan; the pack still runs, unchecked, and says so.</summary>
-    [WindowsFact("the deny ACE that makes a folder unlistable")]
+    [Fact]
     public void ASourceThatCannotBeListedPacksUncheckedInsteadOfRefusing()
     {
         var src = Source("unlistable");
@@ -193,11 +191,7 @@ public sealed class BsaPackCountTests : IDisposable
         Directory.CreateDirectory(denied);
         File.WriteAllText(Path.Combine(denied, "b.nif"), "x");
 
-        var info = new DirectoryInfo(denied);
-        var acl = info.GetAccessControl();
-        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().Name, FileSystemRights.ListDirectory, AccessControlType.Deny);
-        acl.AddAccessRule(deny);
-        info.SetAccessControl(acl);
+        Assert.True(DenyAce.TryDenyListing(denied), "the listing deny did not bite on this host");
         try
         {
             Assert.ThrowsAny<Exception>(() => BsaArchive.ScanPackSource(src));
@@ -207,10 +201,6 @@ public sealed class BsaPackCountTests : IDisposable
             Assert.Null(r.Expected);                                   // nothing to cross-check against
             Assert.DoesNotContain("source folder", r.RunError ?? "");  // the scan did not refuse the pack — BSArch was reached
         }
-        finally
-        {
-            acl.RemoveAccessRule(deny);
-            info.SetAccessControl(acl);
-        }
+        finally { DenyAce.UndenyListing(denied); }
     }
 }

@@ -155,43 +155,9 @@ public sealed class LocalizedCompactWorld : IDisposable
     /// <summary>Deny listing <paramref name="dir"/> until this world is disposed, and report whether the deny took.</summary>
     public bool DenyListing(string dir)
     {
-        if (!TryDenyListing(dir)) return false;
+        if (!DenyAce.TryDenyListing(dir)) return false;
         _denied.Add(dir);
         return true;
-    }
-
-    /// <summary>Deny the current user ListDirectory on <paramref name="dir"/>, and report whether the deny took.</summary>
-    static bool TryDenyListing(string dir)
-    {
-        try
-        {
-            var me = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
-            var di = new DirectoryInfo(dir);
-            var sec = di.GetAccessControl();
-            sec.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(
-                me, System.Security.AccessControl.FileSystemRights.ListDirectory,
-                System.Security.AccessControl.AccessControlType.Deny));
-            di.SetAccessControl(sec);
-            if (!Directory.Exists(dir)) { UndenyListing(dir); return false; }
-            try { Directory.EnumerateFiles(dir).ToList(); }
-            catch (UnauthorizedAccessException) { return true; }
-            catch (IOException) { return true; }
-            UndenyListing(dir);
-            return false;
-        }
-        catch { return false; }
-    }
-
-    /// <summary>Lift the deny <see cref="TryDenyListing"/> added; a failure throws, so a denied folder never sits in TEMP unseen.</summary>
-    static void UndenyListing(string dir)
-    {
-        var me = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
-        var di = new DirectoryInfo(dir);
-        var sec = di.GetAccessControl();
-        sec.RemoveAccessRuleAll(new System.Security.AccessControl.FileSystemAccessRule(
-            me, System.Security.AccessControl.FileSystemRights.ListDirectory,
-            System.Security.AccessControl.AccessControlType.Deny));
-        di.SetAccessControl(sec);
     }
 
     public void Dispose()
@@ -199,7 +165,7 @@ public sealed class LocalizedCompactWorld : IDisposable
         Svc.Dispose();
         foreach (var dir in _denied)
         {
-            try { UndenyListing(dir); }
+            try { DenyAce.UndenyListing(dir); }
             catch (Exception ex) { throw new InvalidOperationException($"could not lift the listing deny on {dir}; remove it by hand: {ex.Message}", ex); }
         }
         try { Directory.Delete(_root, true); } catch { /* best effort */ }
