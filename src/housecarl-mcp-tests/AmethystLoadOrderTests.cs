@@ -27,6 +27,7 @@ public sealed class AmethystLoadOrderTests : IDisposable
         master.Weapons.Add(new Weapon(_weapon, SkyrimRelease.SkyrimSE) { EditorID = "HcAmWeapon", BasicStats = new WeaponBasicStats { Damage = 5 } });
         var masterPath = Path.Combine(_a.DataDir, _master.FileName.String);
         master.BeginWrite.ToPath(masterPath).WithLoadOrder(Array.Empty<ISkyrimModGetter>()).Write();
+        _a.GameLoads(_master.FileName.String);
         WriteOverride(_patch, _a.InMod("PatchMod", _patch));
         // As Amethyst writes them for Skyrim SE: every plugin in loadorder.txt, base-game ones left out of plugins.txt.
         _a.Profile("HcAmMaster.esm\nHcAmPatch.esp\n", "*HcAmPatch.esp\n", "+PatchMod\n");
@@ -167,6 +168,19 @@ public sealed class AmethystLoadOrderTests : IDisposable
         Assert.Equal(new[] { "OwnMod" }, other.Composition!.EnabledMods);   // a locked mod, found in Testing's own folder
         Assert.Contains("HcAmOwn.esp", other.Composition.ActivePluginNames);
         Assert.Equal("default", svc.StatusData().ProfileName);
+    }
+
+    [Fact]
+    public void ARemovedModsRememberedSlotIsNeitherLoadedNorWarnedAbout()
+    {
+        // As after removing a mod in Amethyst: its plugin is gone from plugins.txt and from disk, its slot remembered.
+        _a.Profile("HcAmMaster.esm\nHcAmGone.esp\nHcAmPatch.esp\n", "*HcAmPatch.esp\n", "+PatchMod\n");
+        using var svc = _a.Open();
+
+        var status = svc.StatusData();
+        Assert.Equal(2, status.ResolvedPluginCount);
+        Assert.DoesNotContain(status.Warnings, w => w.Contains("HcAmGone.esp", StringComparison.Ordinal));
+        Assert.DoesNotContain("HcAmGone.esp", status.Composition.ImplicitPluginNames);
     }
 
     [Fact]

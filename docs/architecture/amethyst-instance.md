@@ -36,7 +36,9 @@ Amethyst's `loadorder.txt` is its plugin panel's memory, written when the panel 
 the ten plugins Amethyst pins first, and a newly installed mod's plugin is added to `plugins.txt` alone. On deploy
 Amethyst copies `plugins.txt` into the game's Proton prefix unchanged, so that file is what the game reads. houseCARL
 therefore completes the saved order the way the game loads (`Mo2LoadOrder.CompleteOrder`):
-1. `loadorder.txt` as listed;
+1. `loadorder.txt` as listed, less any entry that is neither in `plugins.txt` nor a plugin the game loads itself:
+   Amethyst keeps a disabled or removed mod's plugin there to remember its slot (`Utils/plugins/sync.py`), and its own
+   panel reads the file only for positions;
 2. every base master (`Skyrim.esm`, `Update.esm`, the three DLC) and every `Skyrim.ccc` entry whose file is in the game's
    Data folder but not listed, in the game's order, after the last such plugin listed;
 3. every `plugins.txt` entry not listed, in that file's order.
@@ -170,7 +172,10 @@ found the gap this closes: the write answer told the user only "enable it in MO2
   untouched, and an Amethyst answer loses every phrase in both spellings. `AmethystWriteTests` checks a real write
   answer and the not-yet-active read in Amethyst's words.
 - `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
-  files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.
+  files read as MO2 unchanged, a complete order left alone, an entry kept only as a remembered slot not loaded, a
+  missing order left empty and named, and locked mods. `AmethystLoadOrderTests` holds that a removed mod's remembered
+  slot is neither loaded nor warned about. The tests' own masters in Data are named in the fake game's `Skyrim.ccc`
+  (`ScratchAmethyst.GameLoads`), as the game loads them; a master only in `loadorder.txt` would not load.
 - `StatusInstanceProfileTests` and the MO2 resolve tests hold that MO2 is unchanged.
 
 ## Where

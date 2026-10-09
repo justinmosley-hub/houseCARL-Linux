@@ -49,6 +49,10 @@ sealed class ScratchAmethyst
         File.WriteAllText(Path.Combine(ProfileDir(profile), "modlist.txt"), modlist);
     }
 
+    /// <summary>Name <paramref name="plugin"/> in the game folder's Skyrim.ccc, so the game loads it itself, as it does a
+    /// Creation Club master: the way a test's own master in Data is loaded without being in plugins.txt.</summary>
+    public void GameLoads(string plugin) => File.AppendAllText(Path.Combine(GamePath, "Skyrim.ccc"), plugin + "\n");
+
     /// <summary>Make <paramref name="profile"/> the active one, as Amethyst records a profile switch.</summary>
     public void Activate(string profile) =>
         File.WriteAllText(Path.Combine(GameConfig, "deploy_state.json"), "{\"last_active_profile\": " + Json(profile) + "}");

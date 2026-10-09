@@ -23,6 +23,7 @@ public sealed class AmethystWriteTests : IDisposable
         var master = new SkyrimMod(_master, SkyrimRelease.SkyrimSE);
         master.Weapons.Add(new Weapon(new FormKey(_master, 0x800), SkyrimRelease.SkyrimSE) { EditorID = "HcAwWeapon", BasicStats = new WeaponBasicStats { Damage = 5 } });
         master.BeginWrite.ToPath(Path.Combine(_a.DataDir, _master.FileName.String)).WithLoadOrder(Array.Empty<ISkyrimModGetter>()).Write();
+        _a.GameLoads(_master.FileName.String);
         _weapon = $"000800:{_master.FileName}";
         // Your own setup's shape: the active profile keeps its own mods.
         _a.Profile("HcAwMaster.esm\n", "", "");

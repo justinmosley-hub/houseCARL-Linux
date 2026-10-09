@@ -53,6 +53,19 @@ public sealed class AmethystPluginOrderTests : IDisposable
     }
 
     [Fact]
+    public void AnEntryKeptOnlyAsAPositionIsNotLoaded()
+    {
+        // Amethyst keeps a disabled or removed mod's plugin in loadorder.txt to remember its slot.
+        _a.Profile("Skyrim.esm\nUpdate.esm\nRemoved.esp\nMine.esp\n", "*Mine.esp\n", "+MineMod\n");
+
+        var comp = Read(partial: true);
+
+        Assert.DoesNotContain("Removed.esp", comp.OrderedPluginNames);
+        Assert.DoesNotContain("Removed.esp", comp.ImplicitPluginNames);
+        Assert.Contains("Removed.esp", Read(partial: false).ImplicitPluginNames);   // MO2's reading of the same files is unchanged
+    }
+
+    [Fact]
     public void AMissingLoadOrderStaysEmptyAndNamed()
     {
         File.Delete(Path.Combine(_a.ProfileDir(), "loadorder.txt"));

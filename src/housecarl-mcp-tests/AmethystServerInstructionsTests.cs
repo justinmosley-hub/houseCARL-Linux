@@ -42,6 +42,7 @@ public sealed class AmethystServerInstructionsTests
             master.Weapons.Add(new Weapon(new FormKey(masterKey, 0x800), SkyrimRelease.SkyrimSE) { EditorID = "HcWireWeapon" });
             var masterPath = Path.Combine(a.DataDir, masterKey.FileName.String);
             master.BeginWrite.ToPath(masterPath).WithLoadOrder(Array.Empty<ISkyrimModGetter>()).Write();
+            a.GameLoads(masterKey.FileName.String);
             using (var ov = SkyrimMod.CreateFromBinaryOverlay(masterPath, SkyrimRelease.SkyrimSE))
             {
                 var patch = new SkyrimMod(new ModKey("HcWire", ModType.Plugin), SkyrimRelease.SkyrimSE);

@@ -189,14 +189,18 @@ public static class Mo2LoadOrder
     /// <summary>The masters the game loads before reading plugins.txt, in its order, when their files are in Data.</summary>
     static readonly string[] BaseMasters = { "Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm" };
 
-    /// <summary>Add what the game loads that the saved order leaves out: a base master or Skyrim.ccc plugin present in Data goes
-    /// after the last one listed, in the game's order, and a plugins.txt entry goes at the end in that file's order.
-    /// Amethyst's loadorder.txt lists only what its plugin panel last saved; the game reads plugins.txt.</summary>
+    /// <summary>Make the saved order the one the game loads. Amethyst's loadorder.txt is its plugin panel's memory of
+    /// positions: it lists only what the panel last saved, and keeps a disabled or removed mod's plugin to remember its
+    /// slot; the game reads plugins.txt. So an entry that is neither in plugins.txt nor one the game loads itself is
+    /// dropped; a base master or Skyrim.ccc plugin present in Data that is missing goes after the last one listed, in the
+    /// game's order; and a plugins.txt entry that is missing goes at the end, in that file's order.</summary>
     static void CompleteOrder(List<string> ordered, IReadOnlyList<string> pluginsTxt, string dataDir)
     {
-        var seen = new HashSet<string>(ordered, StringComparer.OrdinalIgnoreCase);
         var gameLoaded = GameLoadedPlugins(dataDir);
         var gameLoadedSet = new HashSet<string>(gameLoaded, StringComparer.OrdinalIgnoreCase);
+        var loaded = new HashSet<string>(gameLoadedSet.Concat(pluginsTxt), StringComparer.OrdinalIgnoreCase);
+        ordered.RemoveAll(name => !loaded.Contains(name));
+        var seen = new HashSet<string>(ordered, StringComparer.OrdinalIgnoreCase);
         int at = 0;
         for (int i = 0; i < ordered.Count; i++)
             if (gameLoadedSet.Contains(ordered[i])) at = i + 1;
