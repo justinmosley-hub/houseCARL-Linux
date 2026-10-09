@@ -164,7 +164,8 @@ public sealed record LoadOrderStatusData(
     IReadOnlyDictionary<string, string> ExcludedPlugins,
     string? Epoch = null,       // the resolver's current build fingerprint (SPEC §2.1.1) — the status line names it so a caller can match responses/artifacts to the build; nullable like every other carrier
     int ContainedRecordCount = 0,   // children this build recorded a containing record for — the '*parent' map's size, declared in band per SPEC §2.1 rather than left for a user to discover as memory
-    string? Manager = null);        // the configured mod manager ("Mod Organizer 2" or "Amethyst"); null in explicit-paths mode
+    string? Manager = null,         // the configured mod manager ("Mod Organizer 2" or "Amethyst"); null in explicit-paths mode
+    string? ManagerNote = null);    // IManagerInstance.WorkflowNote; null for MO2 and in explicit-paths mode
 
 /// <summary>The data behind housecarl_update_status: MO2's own local Nexus update cache read from meta.ini with no network — one <see cref="Entries"/> row per linked mod, the skipped <see cref="UntrackedCount"/>, and any read <see cref="Problems"/>.</summary>
 public sealed record UpdateCacheData(

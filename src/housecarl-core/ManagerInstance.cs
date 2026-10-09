@@ -14,6 +14,9 @@ public interface IManagerInstance
     /// <summary>"Mod Organizer 2" or "Amethyst", for messages and status.</summary>
     string Manager { get; }
 
+    /// <summary>What a caller must know about this manager that houseCARL's MO2-worded messages do not say; null for MO2.</summary>
+    string? WorkflowNote { get; }
+
     /// <summary>The folder this instance was configured with.</summary>
     string Location { get; }
 

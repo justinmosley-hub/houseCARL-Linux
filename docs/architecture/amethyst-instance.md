@@ -75,6 +75,24 @@ The service re-derives when the manager's fingerprint changes: the stamps of `pa
 switch, a deploy and a restore in Amethyst all rewrite `deploy_state.json`, so each is picked up on the next call.
 Stamps compare by exact ticks (`FileStamp.Key`), never the second-rounded default text.
 
+### Writes land where Amethyst looks, and the user finishes in Amethyst
+houseCARL writes into Amethyst exactly as it writes into MO2: a new patch is a `houseCARL - <stem>` folder in the
+active profile's mods folder (the profile's own when it has `profile_specific_mods`), and houseCARL never edits
+Amethyst's profile files. What Amethyst then does, read from its source:
+- A refresh adds a mod folder `modlist.txt` does not list at the TOP of the mod list, switched off
+  (`sync_modlist_with_mods_folder`).
+- Enabling a mod ticks its plugins and puts each at the END of the load order unless `loadorder.txt` remembers a slot
+  for it (`insert_by_loadorder`), so a new patch overrides what is already there, as in MO2.
+- The game sees a new or newly enabled mod only after a Deploy.
+- Amethyst rewrites a mod's `meta.ini` through Python's `configparser`, which keeps other sections but lower-cases keys
+  and writes `key = value`. The ownership check (`HousecarlOwnerMeta.MarksOwned`) ignores case and spaces, so a
+  patch stays houseCARL's.
+
+houseCARL's messages were written for MO2 and say "MO2" (about 195 of them, spread over many renderers). Rather than
+reword each, the manager says once what differs: `IManagerInstance.WorkflowNote`, shown under `manager:` in
+`housecarl_load_order_status` and in the setup tool's answer. For Amethyst it says the messages mean Amethyst, where a
+new mod appears, and that a Deploy is needed. MO2's is null, so MO2 output is unchanged.
+
 ## Pinned by
 - `AmethystInstanceResolveTests` — every rule above on a synthetic setup: the roots, the active profile and its
   default, profile-specific mods, a profile's game path, Data_Core while deployed, the refusals, the default staging
@@ -83,6 +101,9 @@ Stamps compare by exact ticks (`FileStamp.Key`), never the second-rounded defaul
   `plugins.txt` loads, a plugin ticked mid-session loads, a deployed patch has one copy (never Data's link), a deploy,
   restore and profile switch are picked up without a restart, a switch between a profile with its own mods and one
   with the shared mods swaps both ways, and another profile is read from its own mods folder without switching.
+- `AmethystWriteTests` — a new patch lands in the active profile's own mods folder and never the shared one, stays
+  houseCARL's after its `meta.ini` is rewritten in `configparser`'s format (an `into=` extends it), and the status and
+  setup answers carry the Amethyst note while MO2's carry none.
 - `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
   files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.
 - `StatusInstanceProfileTests` and the MO2 resolve tests hold that MO2 is unchanged.

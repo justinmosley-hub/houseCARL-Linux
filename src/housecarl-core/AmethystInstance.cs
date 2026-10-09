@@ -143,6 +143,12 @@ public static class AmethystInstance
         return ok ? new ManagerInstancePaths(gameConfigDir, profile, profileDir, modsDir, dataDir, gamePath!, overwriteDir) : null;
     }
 
+    /// <summary>Where houseCARL's messages say MO2 they mean Amethyst; the steps that differ are Amethyst's own.</summary>
+    public const string WorkflowNote =
+        "messages that say MO2 mean Amethyst here. A new houseCARL mod folder shows at the top of Amethyst's mod list, " +
+        "switched off, once Amethyst refreshes; enabling it adds its plugin at the end of the load order. The game sees a " +
+        "new or newly enabled mod only after a Deploy in Amethyst.";
+
     /// <summary>A profile's mods folder: its own when its settings say profile_specific_mods, else the staging root's.</summary>
     public static string ModsDirFor(string profileDir)
     {
@@ -219,6 +225,7 @@ public sealed class AmethystManagerInstance(string gameConfigDir) : IManagerInst
     public string Manager => "Amethyst";
     public string Location { get; } = gameConfigDir;
     public bool PartialLoadOrder => true;
+    public string? WorkflowNote => AmethystInstance.WorkflowNote;
     public string ModsDirFor(string profileDir, string activeModsDir) => AmethystInstance.ModsDirFor(profileDir);
 
     public ManagerInstancePaths Resolve() => AmethystInstance.Resolve(Location);

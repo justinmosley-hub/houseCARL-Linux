@@ -97,6 +97,7 @@ public static class SetupTools
               .Append(" — the instance itself validated; the first real read will confirm.)\n");
         }
 
+        if (!mo2) sb.Append("note: ").Append(AmethystInstance.WorkflowNote).Append('\n');
         sb.Append(persisted
             ? "saved to houseCARL.user.json — persists across restarts."
             : $"NOTE: could not save the choice ({persistError}) — it works this session, but you'll need to set it again after a restart.");

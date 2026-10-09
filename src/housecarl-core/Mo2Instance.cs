@@ -126,6 +126,7 @@ public sealed class Mo2ManagerInstance(string instanceDir) : IManagerInstance
     public string Manager => "Mod Organizer 2";
     public string Location { get; } = instanceDir;
     public bool PartialLoadOrder => false;
+    public string? WorkflowNote => null;
     public string ModsDirFor(string profileDir, string activeModsDir) => activeModsDir;
     public ManagerInstancePaths Resolve() => Mo2Instance.Resolve(Location);
     public bool TryResolve(out ManagerInstancePaths? paths) => Mo2Instance.TryResolve(Location, out paths);

@@ -674,7 +674,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     public LoadOrderStatusData StatusData()
     {
         // The view and the per-build fields beside it are snapshotted under ONE gate hold, so no status line mixes two builds.
-        LoadOrderResolver.IndexView view; IReadOnlyList<string> warnings; bool profileChanged; string profileDir, modsDir, dataDir, overwriteDir; string profileName; string? instanceDir; string? manager; bool partial;
+        LoadOrderResolver.IndexView view; IReadOnlyList<string> warnings; bool profileChanged; string profileDir, modsDir, dataDir, overwriteDir; string profileName; string? instanceDir; string? manager, managerNote; bool partial;
         lock (_gate)
         {
             view = Resolver.Capture();                             // force build/refresh; one build for count + exclusions
@@ -684,12 +684,12 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
             modsDir = _modsDir; dataDir = _dataDir; overwriteDir = _overwriteDir; partial = _instance?.PartialLoadOrder == true;
             profileName = _profileName;                            // captured under the same gate — one snapshot, never re-derived at render
             instanceDir = _instance?.Location;                     // the configured manager folder; null ⇒ explicit-paths / unconfigured mode
-            manager = _instance?.Manager;
+            manager = _instance?.Manager; managerNote = _instance?.WorkflowNote;
         }
         var comp = Mo2LoadOrder.ReadComposition(profileDir, modsDir, dataDir, partial);   // fresh composition (always current)
         return new LoadOrderStatusData(
             comp, warnings, view.PluginCount, _maxPlugins, profileChanged, profileDir, modsDir, dataDir, overwriteDir, profileName, instanceDir, view.ExcludedPlugins,
-            view.Epoch, view.ContainedRecordCount, manager);
+            view.Epoch, view.ContainedRecordCount, manager, managerNote);
     }
 
     /// <summary>Whole-order stats (forces the lazy build). A test seam: the probes warm the lazy index through it. No shipped caller.</summary>

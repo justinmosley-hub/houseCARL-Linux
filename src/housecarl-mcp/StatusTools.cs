@@ -67,6 +67,7 @@ static class StatusWire
         // The resolved MO2 instance; null means explicit-paths mode, which has no MO2 instance folder.
         sb.Append("instance: ").Append(d.InstanceDir ?? "explicit-paths mode (no mod manager configured)").Append('\n');
         if (d.Manager is { } manager) sb.Append("manager:  ").Append(manager).Append('\n');
+        if (d.ManagerNote is { } note) sb.Append("  note: ").Append(note).Append('\n');
         sb.Append("mods:    ").Append(c.EnabledMods.Count).Append(" enabled · ").Append(c.DisabledMods.Count).Append(" disabled\n");
         sb.Append("plugins in load order: ").Append(c.OrderedPluginNames.Count).Append('\n');
         sb.Append("  active:   ").Append(gameLoaded).Append("  (").Append(checkedActive).Append(" checked + ").Append(impl).Append(" implicit masters/CC)\n");
