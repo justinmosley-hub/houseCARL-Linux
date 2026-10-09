@@ -179,8 +179,9 @@ static class JsonWire
         int shown = 0;
         foreach (var s in items)
         {
-            // shown > 0: the first line always renders, exactly as it does on the text lane.
-            if (shown > 0 && Over(w, ms, budget)) break;
+            // shown > 0: the first line always renders, exactly as it does on the text lane. Every later one is
+            // measured BEFORE it is written, as the text lane's TryAppend does, so the list cannot end past budget.
+            if (shown > 0 && Size(w, ms) + MeasureUnit(w.CurrentDepth, true, x => x.WriteStringValue(s)) > budget) break;
             w.WriteStringValue(s);
             shown++;
         }
@@ -2754,8 +2755,10 @@ static class JsonWire
             foreach (var r in d.Results)
             {
                 // rendered > 0: the FIRST row always renders its core answer, as BatchRender does on the text lane.
-                if (rendered > 0 && Over(w, ms, budget)) break;
-                WriteAssetRow(w, r, d.BsaFailures.Count > 0, d.Warnings.Count > 0, d.RootFailures.Count > 0);
+                // Every later row is measured before it is written, so the one that would cross the budget is left out (#859).
+                bool bsaAlarm = d.BsaFailures.Count > 0, warnAlarm = d.Warnings.Count > 0, rootAlarm = d.RootFailures.Count > 0;
+                if (rendered > 0 && Size(w, ms) + MeasureUnit(w.CurrentDepth, true, x => WriteAssetRow(x, r, bsaAlarm, warnAlarm, rootAlarm)) > budget) break;
+                WriteAssetRow(w, r, bsaAlarm, warnAlarm, rootAlarm);
                 rendered++;
             }
             w.WriteEndArray();

@@ -485,6 +485,29 @@ public sealed class AssetSelectTests : IClassFixture<AssetSelectWorld>
         Assert.Equal(5, System.Text.Json.JsonDocument.Parse(json).RootElement.GetProperty("counted").GetInt32());
     }
 
+    /// <summary>A caveat or a row past the first is written only when it fits, at EVERY cap, not just a picked one: a
+    /// single cap passes or fails on where the item boundaries happen to fall, which moves with every line-break
+    /// width (#859). Beyond the always-shown first items, nothing may carry the document past max_chars.</summary>
+    [Fact]
+    public void NoCaveatOrRowPastTheFirstCrossesTheCeilingAtAnyCap()
+    {
+        var many = new[] { AssetSelectWorld.FaceGeomDir }
+            .Concat(Enumerable.Range(0, 40).Select(i => @"meshes\hcnothing" + i)).ToArray();
+        var crossed = new List<string>();
+        for (int cap = 800; cap <= 4_000; cap += 3)
+        {
+            var census = AssetTools.AssetStatus(_w.Svc, under: many, counts_only: true, format: "json", max_chars: cap);
+            if (census.Length > cap && Count(census, "selector_notes") > 1) crossed.Add($"census at {cap}: {census.Length}");
+
+            var rows = AssetTools.AssetStatus(_w.Svc, under: new[] { "meshes" }, format: "json", max_chars: cap);
+            if (rows.Length > cap && Count(rows, "results") > 1) crossed.Add($"rows at {cap}: {rows.Length}");
+        }
+        Assert.Empty(crossed);
+
+        static int Count(string json, string array) =>
+            System.Text.Json.JsonDocument.Parse(json).RootElement.GetProperty(array).GetArrayLength();
+    }
+
     /// <summary>The json document's tail is reserved out of max_chars before anything is written, as the path
     /// render's is — a census that overran by its own closing members would make max_chars mean two things on one
     /// tool.</summary>
