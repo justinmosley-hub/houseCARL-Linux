@@ -2,10 +2,6 @@ namespace HousecarlCore;
 
 // Derive the four load-order roots from ONE path — the MO2 instance folder — out of its ModOrganizer.ini; the derivation and the QSettings quirks are in docs/architecture/mo2-instance.md.
 
-/// <summary>The four load-order roots derived from an MO2 instance folder, plus the active profile name and game root; feed them straight to <see cref="Mo2LoadOrder.Build"/>.</summary>
-public sealed record Mo2InstancePaths(
-    string InstanceDir, string ProfileName, string ProfileDir, string ModsDir, string DataDir, string GamePath, string OverwriteDir);
-
 public static class Mo2Instance
 {
     public const string IniFileName = "ModOrganizer.ini";
@@ -14,7 +10,7 @@ public static class Mo2Instance
     public static string IniPath(string instanceDir) => Path.Combine(instanceDir, IniFileName);
 
     /// <summary>Derive the load-order roots from an instance folder, or THROW naming what is missing; use <see cref="Validate"/> for the problems without an exception.</summary>
-    public static Mo2InstancePaths Resolve(string instanceDir)
+    public static ManagerInstancePaths Resolve(string instanceDir)
     {
         var problems = new List<string>();
         var paths = Derive(instanceDir, problems);
@@ -25,14 +21,14 @@ public static class Mo2Instance
     }
 
     /// <summary>Non-throwing derive for the cheap freshness re-check: never throws, so a transient read yields false and the caller keeps its last good set.</summary>
-    public static bool TryResolve(string instanceDir, out Mo2InstancePaths? paths)
+    public static bool TryResolve(string instanceDir, out ManagerInstancePaths? paths)
     {
         paths = Derive(instanceDir, null);
         return paths is not null;
     }
 
     /// <summary>Validate a candidate instance folder for the setup tool: whether it is usable, the derived paths, and the specific problems to show the user.</summary>
-    public static (bool ok, Mo2InstancePaths? paths, IReadOnlyList<string> problems) Validate(string instanceDir)
+    public static (bool ok, ManagerInstancePaths? paths, IReadOnlyList<string> problems) Validate(string instanceDir)
     {
         var problems = new List<string>();
         var paths = Derive(instanceDir, problems);
@@ -52,7 +48,7 @@ public static class Mo2Instance
     }
 
     /// <summary>The single derive worker: it populates <paramref name="problems"/> when given one, and returns paths ONLY when every required piece resolves to a real folder.</summary>
-    static Mo2InstancePaths? Derive(string instanceDir, List<string>? problems)
+    static ManagerInstancePaths? Derive(string instanceDir, List<string>? problems)
     {
         if (string.IsNullOrWhiteSpace(instanceDir)) { problems?.Add("no path was given"); return null; }
         instanceDir = instanceDir.Trim().TrimEnd('\\', '/');
@@ -61,7 +57,7 @@ public static class Mo2Instance
         var ini = IniPath(instanceDir);
         if (!File.Exists(ini))
         {
-            problems?.Add($"no {IniFileName} here — point at the MO2 instance folder (for a Wabbajack/portable list, the list's install folder)");
+            problems?.Add($"no {IniFileName} here, and it is not an Amethyst game either — point at the MO2 instance folder (for a Wabbajack/portable list, the list's install folder), or for Amethyst the game's mod folder (the one holding profiles/ and mods/) or its config folder ({AmethystInstance.ConfigHint}/games/<game>)");
             return null;
         }
 
@@ -101,7 +97,7 @@ public static class Mo2Instance
         if (!ok) return null;
 
         // Overwrite is derived base-relative like mods and profiles, but never gates validity.
-        return new Mo2InstancePaths(instanceDir, profile!, profileDir, modsDir, dataDir, gamePath!, Path.Combine(basePath, "overwrite"));
+        return new ManagerInstancePaths(instanceDir, profile!, profileDir, modsDir, dataDir, gamePath!, Path.Combine(basePath, "overwrite"));
     }
 
     /// <summary>First <c>key=</c> line's raw value, the key matched case-insensitively and ignoring section headers, which is safe only because the keys read here are unique across the file; null if the key is not present.</summary>
@@ -121,4 +117,15 @@ public static class Mo2Instance
 
     /// <summary>Read a QSettings value through the one shared reader, so both MO2 ini readers behave the same.</summary>
     static string? CleanValue(string? raw) => QtIniEscapes.Clean(raw);
+}
+
+/// <summary>An MO2 instance as the service's <see cref="IManagerInstance"/>; ModOrganizer.ini is the one file that
+/// moves its roots (a profile switch rewrites selected_profile).</summary>
+public sealed class Mo2ManagerInstance(string instanceDir) : IManagerInstance
+{
+    public string Manager => "Mod Organizer 2";
+    public string Location { get; } = instanceDir;
+    public ManagerInstancePaths Resolve() => Mo2Instance.Resolve(Location);
+    public bool TryResolve(out ManagerInstancePaths? paths) => Mo2Instance.TryResolve(Location, out paths);
+    public string Fingerprint() => FileStamp.Of(Mo2Instance.IniPath(Location)).Key;
 }

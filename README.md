@@ -15,8 +15,12 @@
 >
 > - The full test suite passes on Linux: 6,570 passed, 0 failed, 11 skipped with a stated reason.
 >
-> Not done yet: reading an Amethyst setup (next), writing into Amethyst, Papyrus compile through Wine, and a Linux
-> release package.
+> - **Reads an Amethyst game**: point the setup tool at the game's mod folder (by default
+>   `~/Games/Amethyst/<game>`); the active profile, load order and assets come from Amethyst's own files, and a
+>   profile switch, deploy or restore is picked up without a restart.
+>
+> Not done yet: writing patches into Amethyst (new patches would land in its mods folder but are not yet
+> Amethyst-aware), Papyrus compile through Wine, and a Linux release package.
 >
 > What changed and why, written for anyone who knows houseCARL and Windows but not Linux:
 > [docs/linux-and-amethyst.md](docs/linux-and-amethyst.md). The rest of this README is upstream's and describes

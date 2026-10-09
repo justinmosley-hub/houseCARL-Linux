@@ -57,7 +57,7 @@ public class ServerBuildLineTests
                 LoadOrderService.WithInstance(null, 0, store), new ToolPathResolver(store));
 
             Assert.StartsWith("server:   " + ServerBuild.Line, text);
-            Assert.Contains("no Mod Organizer 2 instance configured", text);
+            Assert.Contains(ServerFixture.ConfigPrompt, text);
         }
         finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
     }

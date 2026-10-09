@@ -30,7 +30,7 @@ public sealed class ServerFixture : IDisposable
     internal TimeSpan RpcTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>The trained prompt an unconfigured server gives once a tool BODY runs.</summary>
-    public const string ConfigPrompt = "no Mod Organizer 2 instance configured";
+    public const string ConfigPrompt = "no mod manager configured";
 
     /// <summary>The SDK's generic bind failure — the answer a caller gets when the body never ran.</summary>
     public const string GenericError = "An error occurred invoking";

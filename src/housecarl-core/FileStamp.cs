@@ -6,6 +6,9 @@ public readonly record struct FileStamp(DateTime Mtime, long Size)
     /// <summary>The one sentinel for missing, locked and unreadable; distinct from every real stamp, whose length is never negative.</summary>
     public static readonly FileStamp Absent = new(DateTime.MinValue, -1);
 
+    /// <summary>The stamp as exact text — ticks, not the second-rounded default — for fingerprints compared as strings.</summary>
+    public string Key => $"{Mtime.Ticks}:{Size}";
+
     /// <summary>Stat one FILE, or <see cref="Absent"/> when it cannot be statted.</summary>
     public static FileStamp Of(string path)
     {

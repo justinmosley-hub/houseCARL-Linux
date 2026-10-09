@@ -45,6 +45,7 @@ Grouped to match the "Where things live" table in [CLAUDE.md](../CLAUDE.md), so 
 | Note | What it covers |
 |---|---|
 | [`architecture/mo2-instance.md`](architecture/mo2-instance.md) | houseCARL reads a live MO2 portable instance off disk, never through the USVFS, so the instance ini and the three profile files are the only standalone source of truth. |
+| [`architecture/amethyst-instance.md`](architecture/amethyst-instance.md) | houseCARL reads an Amethyst game from its own files: the roots, the active profile, and `Data_Core` as the untouched game while deployed. |
 | [`architecture/load-order-resolver.md`](architecture/load-order-resolver.md) | The held structural index over the active order: zero handles at rest, one immutable snapshot per build, exclusion, the epoch, and freshness. |
 | [`architecture/load-order-service.md`](architecture/load-order-service.md) | The service that owns the resolver's lifecycle: the two gates, the lazy build, the profile refresh and the two lanes' split on a held profile, the asset build, and the three configuration modes. |
 
@@ -125,3 +126,4 @@ Grouped to match the "Where things live" table in [CLAUDE.md](../CLAUDE.md), so 
 | [`decisions/0004-tool-names-are-compile-time-constants.md`](decisions/0004-tool-names-are-compile-time-constants.md) | Tool names are compile-time constants, never spelled by hand. |
 | [`decisions/0005-the-1x-tools-are-deleted-not-deprecated.md`](decisions/0005-the-1x-tools-are-deleted-not-deprecated.md) | The 1.x tools are deleted, not deprecated. |
 | [`decisions/0006-game-paths-resolve-case-insensitively-on-linux.md`](decisions/0006-game-paths-resolve-case-insensitively-on-linux.md) | Game paths resolve case-insensitively on Linux, through one helper in core. |
+| [`decisions/0007-amethyst-is-read-from-its-files.md`](decisions/0007-amethyst-is-read-from-its-files.md) | Amethyst is read from its files, behind one manager interface chosen by what the folder holds. |

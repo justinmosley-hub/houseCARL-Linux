@@ -1,0 +1,2 @@
+- **houseCARL runs on Linux and reads an Amethyst Mod Manager game as it reads MO2: pass `housecarl_set_mo2_instance` the game's mod folder (by default `~/Games/Amethyst/<game>`).** `housecarl_load_order_status` then names `manager: Amethyst` and the active profile.
+- **Every response now keeps to its `max_chars`; json write answers and caveat lists no longer overshoot by the row that crossed.**

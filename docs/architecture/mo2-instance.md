@@ -167,3 +167,6 @@ swallows the note turns a recoverable state into a silent loss.
 reads a mod's `meta.ini`; `UserConfig.cs` is `houseCARL.user.json` and `UserConfigStore`. The tool fronts are
 `src/housecarl-mcp/SetupTools.cs`, `StatusTools.cs` and `UpdateStatusTools.cs`. Tools: `housecarl_set_mo2_instance`,
 `housecarl_set_tool_path`, `housecarl_load_order_status`, `housecarl_update_status`.
+
+## Related
+- [`amethyst-instance.md`](amethyst-instance.md) — the other manager behind `IManagerInstance`; both resolve to `ManagerInstancePaths` and share these profile files.

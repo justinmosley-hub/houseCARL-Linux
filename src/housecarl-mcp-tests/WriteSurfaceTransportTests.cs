@@ -46,7 +46,7 @@ public sealed class WriteSurfaceTransportTests : IClassFixture<WriteSurfaceWorld
             "apply" => ApplyTools.Apply(bare, ops: Json($$"""[{"formid":"{{_w.SubjectFid}}","field_path":"Name","value":"x"}]"""), format: "json"),
             _ => SeqTools.WriteSeq(bare, source: _w.MasterName, format: "json"),
         };
-        Assert.Contains("no Mod Organizer 2 instance configured", Root(render).GetProperty("error").GetString());
+        Assert.Contains(ServerFixture.ConfigPrompt, Root(render).GetProperty("error").GetString());
     }
 
     // probe: create text: the unconfigured-MO2 prompt stays the trained prose block
@@ -55,7 +55,7 @@ public sealed class WriteSurfaceTransportTests : IClassFixture<WriteSurfaceWorld
     {
         using var bare = LoadOrderService.WithInstance(null, 0, new UserConfigStore(Path.Combine(_w.Root, "hc-unconfigured-text.user.json")));
         var r = CreateTools.Create(bare, records: Json("""[{"record_type":"Keyword","editorid":"X"}]"""));
-        Assert.Contains("no Mod Organizer 2 instance configured", r);
+        Assert.Contains(ServerFixture.ConfigPrompt, r);
         Assert.False(r.TrimStart().StartsWith("{", StringComparison.Ordinal), r);
     }
 

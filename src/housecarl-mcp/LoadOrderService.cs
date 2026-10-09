@@ -8,11 +8,11 @@ namespace HousecarlMcp;
 /// <summary>Owns the load-order resolver's lifecycle and is the one place the tools reach the core engines; contract in docs/architecture/load-order-service.md.</summary>
 public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHost, IReadHost, IOutputHost, IWriteHost
 {
-    string? _instanceDir;                          // INSTANCE-mode source of truth; null in explicit/unconfigured mode
+    IManagerInstance? _instance;                   // INSTANCE-mode source of truth (MO2 or Amethyst); null in explicit/unconfigured mode
     string _dataDir;                               // DERIVED (instance mode) or configured (explicit); mutable for a live profile switch
     string _modsDir;
     string _profileDir;
-    string _profileName;                           // the active profile (instance mode: from selected_profile)
+    string _profileName;                           // the active profile (instance mode: from the manager's own record of it)
     string _overwriteDir = "";                     // MO2's overwrite layer (instance mode: derived; explicit mode: none)
     bool _configured;                              // false ⇒ tools return the trained prompt instead of resolving
     readonly UserConfigStore _store;               // the sole owner of houseCARL.user.json (MO2 instance dir + tool paths)
@@ -39,7 +39,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     IReadOnlyList<string> _enabledModsAtBuild = Array.Empty<string>();             // enabled mods behind the current asset build; the loader scan walks these mods' Root folders, from the same capture as the view rather than a second profile read
     // Freshness baselines are last-seen FileStamps compared by value; contract in docs/architecture/load-order-resolver.md.
     FileStamp[] _profileStamps = new FileStamp[ProfileFileNames.Length];   // per ProfileFileNames, recorded at each order build
-    FileStamp _iniStamp;                                                   // ModOrganizer.ini (instance-mode profile-switch baseline)
+    string? _instanceFingerprint;                                          // the manager's fingerprint (instance-mode profile-switch baseline)
     IReadOnlyList<string> _resolvedPaths = Array.Empty<string>();   // ordered paths the current snapshot was built from (the cheap "did the order actually change?" check)
     // Set when a refresh found the profile changed but could not re-read it; the two lanes' split is in
     // docs/architecture/load-order-service.md.
@@ -47,9 +47,9 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
 
     static readonly string[] ProfileFileNames = { "loadorder.txt", "modlist.txt", "plugins.txt" };
 
-    LoadOrderService(string? instanceDir, string dataDir, string modsDir, string profileDir, bool configured, int maxPlugins, UserConfigStore store)
+    LoadOrderService(IManagerInstance? instance, string dataDir, string modsDir, string profileDir, bool configured, int maxPlugins, UserConfigStore store)
     {
-        _instanceDir = instanceDir;
+        _instance = instance;
         _dataDir = dataDir;
         _modsDir = modsDir;
         _profileDir = profileDir;
@@ -69,9 +69,10 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         _writes = new RecordWrites(this, _outputLocations);
     }
 
-    /// <summary>INSTANCE mode (product default): derive the roots and active profile from ONE MO2 instance folder; a null or blank path is UNCONFIGURED.</summary>
+    /// <summary>INSTANCE mode (product default): derive the roots and active profile from ONE mod manager's folder — an
+    /// MO2 instance or an Amethyst game (<see cref="ManagerInstance.Open"/>); a null or blank path is UNCONFIGURED.</summary>
     public static LoadOrderService WithInstance(string? instanceDir, int maxPlugins, UserConfigStore store)
-        => new(string.IsNullOrWhiteSpace(instanceDir) ? null : instanceDir.Trim(),
+        => new(string.IsNullOrWhiteSpace(instanceDir) ? null : ManagerInstance.Open(instanceDir),
                "", "", "", configured: !string.IsNullOrWhiteSpace(instanceDir), maxPlugins, store);
 
     /// <summary>EXPLICIT mode (dev override): the three roots are configured directly; no ModOrganizer.ini is read.</summary>
@@ -673,7 +674,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     public LoadOrderStatusData StatusData()
     {
         // The view and the per-build fields beside it are snapshotted under ONE gate hold, so no status line mixes two builds.
-        LoadOrderResolver.IndexView view; IReadOnlyList<string> warnings; bool profileChanged; string profileDir, modsDir, dataDir, overwriteDir; string profileName; string? instanceDir;
+        LoadOrderResolver.IndexView view; IReadOnlyList<string> warnings; bool profileChanged; string profileDir, modsDir, dataDir, overwriteDir; string profileName; string? instanceDir; string? manager;
         lock (_gate)
         {
             view = Resolver.Capture();                             // force build/refresh; one build for count + exclusions
@@ -682,12 +683,13 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
             profileDir = _profileDir;
             modsDir = _modsDir; dataDir = _dataDir; overwriteDir = _overwriteDir;
             profileName = _profileName;                            // captured under the same gate — one snapshot, never re-derived at render
-            instanceDir = _instanceDir;                            // the configured MO2 instance folder; null ⇒ explicit-paths / unconfigured mode
+            instanceDir = _instance?.Location;                     // the configured manager folder; null ⇒ explicit-paths / unconfigured mode
+            manager = _instance?.Manager;
         }
         var comp = Mo2LoadOrder.ReadComposition(profileDir);       // fresh composition (always current)
         return new LoadOrderStatusData(
             comp, warnings, view.PluginCount, _maxPlugins, profileChanged, profileDir, modsDir, dataDir, overwriteDir, profileName, instanceDir, view.ExcludedPlugins,
-            view.Epoch, view.ContainedRecordCount);
+            view.Epoch, view.ContainedRecordCount, manager);
     }
 
     /// <summary>Whole-order stats (forces the lazy build). A test seam: the probes warm the lazy index through it. No shipped caller.</summary>
@@ -721,7 +723,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         {
             if (!_configured) throw NotConfigured();               // fresh install → the tool surfaces the prompt for the MO2 path
             EnsurePathsDerived();                                  // instance mode: derive _modsDir/_profileDir from the ini (throws if unusable)
-            modsDir = _modsDir; profileDir = _profileDir; instanceDir = _instanceDir;
+            modsDir = _modsDir; profileDir = _profileDir; instanceDir = _instance?.Location;
         }
 
         if (string.IsNullOrEmpty(modsDir) || !Directory.Exists(modsDir))
@@ -768,7 +770,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         {
             if (!_configured) throw NotConfigured();              // fresh install → the tool returns the prompt for the MO2 path
             EnsurePathsDerived();                                 // instance mode: derive the active ProfileDir (cheap ini read; throws if the instance is unusable)
-            instanceDir = _instanceDir;
+            instanceDir = _instance?.Location;
             profilesRoot = instanceDir is null ? "" : (Path.GetDirectoryName(_profileDir.TrimEnd('\\', '/')) ?? "");
         }
 
@@ -831,21 +833,21 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         ReResolve(new(ProfileDir: _profileDir, DataDir: _dataDir, ModsDir: _modsDir, OverwriteDir: _overwriteDir));
     }
 
-    /// <summary>Instance mode only: when ModOrganizer.ini moved the roots, re-resolve under the new ones and publish them only with that order; true iff it saw a switch. Caller holds the gate.</summary>
+    /// <summary>Instance mode only: when the manager's own files moved the roots (an MO2 ini rewrite; an Amethyst profile
+    /// switch, deploy or restore), re-resolve under the new ones and publish them only with that order; true iff it saw
+    /// a switch. Caller holds the gate.</summary>
     bool RederiveIfIniChanged()
     {
-        if (_instanceDir is null) return false;                  // explicit/override mode — no ini to watch
-        var ini = Mo2Instance.IniPath(_instanceDir);
-        if (!File.Exists(ini)) return false;                     // missing/mid-replace → keep last good, retry next call
-        var iniStamp = FileStamp.Of(ini);                         // stat BEFORE the read: an ini write during/after TryResolve is caught next call
-        if (iniStamp == _iniStamp) return false;                  // compared by value — a restored-backup ini carries an older mtime and is a change too
-        if (!Mo2Instance.TryResolve(_instanceDir, out var p) || p is null) return false;   // mid-write/invalid → keep last good, retry next call
+        if (_instance is null) return false;                     // explicit/override mode — nothing to watch
+        var fingerprint = _instance.Fingerprint();               // taken BEFORE the read: a write during/after TryResolve is caught next call
+        if (fingerprint == _instanceFingerprint) return false;   // compared by value — a restored-backup file carries an older mtime and is a change too
+        if (!_instance.TryResolve(out var p) || p is null) return false;   // mid-write/invalid → keep last good, retry next call
         bool switched = !PathEq(p.ProfileDir, _profileDir) || !PathEq(p.ModsDir, _modsDir) || !PathEq(p.DataDir, _dataDir)
                         || !PathEq(p.OverwriteDir, _overwriteDir);
-        if (!switched) { _iniStamp = iniStamp; return false; }   // ini touched but nothing we resolve from changed
+        if (!switched) { _instanceFingerprint = fingerprint; return false; }   // touched, but nothing we resolve from changed
         // A new profile's order that is held or empty keeps the old roots, resolver and ini stamp, so the next call retries.
         if (!ReResolve(new(ProfileDir: p.ProfileDir, DataDir: p.DataDir, ModsDir: p.ModsDir, OverwriteDir: p.OverwriteDir))) return true;
-        _iniStamp = iniStamp;                                     // advance only once the new roots are published
+        _instanceFingerprint = fingerprint;                       // advance only once the new roots are published
         _profileDir = p.ProfileDir; _modsDir = p.ModsDir; _dataDir = p.DataDir; _profileName = p.ProfileName; _overwriteDir = p.OverwriteDir;
         System.Threading.Interlocked.Increment(ref _gameRootsGen);   // the game roots moved → the runtime memo re-probes
         InvalidateClassParents();                                // the mods tree may have moved — drop the cached hierarchy with it
@@ -895,15 +897,15 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         return false;
     }
 
-    /// <summary>Instance mode: on the first build, derive the roots and active profile from ModOrganizer.ini, throwing a message naming what is missing. Caller holds the gate.</summary>
+    /// <summary>Instance mode: on the first build, derive the roots and active profile from the manager's files, throwing a message naming what is missing. Caller holds the gate.</summary>
     void EnsurePathsDerived()
     {
-        if (_instanceDir is null) return;                        // explicit mode — roots configured directly
+        if (_instance is null) return;                           // explicit mode — roots configured directly
         if (_profileDir.Length > 0) return;                      // already derived (a prior build / SetInstance); RederiveIfIniChanged owns later updates
-        var iniStamp = FileStamp.Of(Mo2Instance.IniPath(_instanceDir)); // stat BEFORE the read: an ini write during/after Resolve is caught next call
-        var p = Mo2Instance.Resolve(_instanceDir);               // throws, naming the missing piece, if this is not a usable instance
+        var fingerprint = _instance.Fingerprint();               // taken BEFORE the read: a write during/after Resolve is caught next call
+        var p = _instance.Resolve();                             // throws, naming the missing piece, if this is not a usable instance
         _profileDir = p.ProfileDir; _modsDir = p.ModsDir; _dataDir = p.DataDir; _profileName = p.ProfileName; _overwriteDir = p.OverwriteDir;
-        _iniStamp = iniStamp;
+        _instanceFingerprint = fingerprint;
         InvalidateClassParents();                                // _modsDir just gained a value — a cache built before derivation is baseline-only
     }
 
@@ -1019,19 +1021,21 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
         return Path.GetFileName(t).Equals("Data", StringComparison.OrdinalIgnoreCase) ? (Path.GetDirectoryName(t) ?? t) : t;
     }
 
-    /// <summary>Point houseCARL at an MO2 instance folder: validate it, re-point the live service, and persist the choice. Nothing changes or persists on failure.</summary>
-    public (Mo2InstancePaths paths, bool persisted, string? persistError, string? persistNote) SetInstance(string instanceDir)
+    /// <summary>Point houseCARL at a mod manager — an MO2 instance folder or an Amethyst game's mod or config folder:
+    /// validate it, re-point the live service, and persist the choice. Nothing changes or persists on failure.</summary>
+    public (ManagerInstancePaths paths, string manager, bool persisted, string? persistError, string? persistNote) SetInstance(string instanceDir)
     {
-        // The ini baseline is statted BEFORE Resolve reads the instance, the same discipline as every other baseline here.
-        var iniStamp = FileStamp.Of(Mo2Instance.IniPath(instanceDir.Trim()));
-        var paths = Mo2Instance.Resolve(instanceDir);            // throws if not a usable MO2 instance — the tool renders the reason
+        var instance = ManagerInstance.Open(instanceDir);
+        // The fingerprint is taken BEFORE Resolve reads the instance, the same discipline as every other baseline here.
+        var fingerprint = instance.Fingerprint();
+        var paths = instance.Resolve();                          // throws if not a usable instance — the tool renders the reason
         lock (_writeGate)                                        // an instance switch waits for any in-flight write, so one can never tear across instances
         lock (_gate)
         {
-            _instanceDir = paths.InstanceDir;
+            _instance = instance;
             _dataDir = paths.DataDir; _modsDir = paths.ModsDir; _profileDir = paths.ProfileDir; _profileName = paths.ProfileName;
             _overwriteDir = paths.OverwriteDir;
-            _iniStamp = iniStamp;
+            _instanceFingerprint = fingerprint;
             _configured = true;
             _resolver?.Dispose(); _resolver = null;              // force a rebuild against the new instance on the next query
             _assetResolver?.Dispose(); _assetResolver = null;    // the asset resolver rebuilds against the new instance too
@@ -1042,7 +1046,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
             System.Threading.Interlocked.Increment(ref _gameRootsGen);   // a new instance may be a different game install — the runtime memo must re-probe rather than adjudicate against the old exe
         }
         var (persisted, persistError, persistNote) = PersistInstanceDir(paths.InstanceDir);
-        return (paths, persisted, persistError, persistNote);
+        return (paths, instance.Manager, persisted, persistError, persistNote);
     }
 
     /// <summary>Persist the chosen instance dir through the shared <see cref="UserConfigStore"/> (read-modify-write); a write failure is reported rather than swallowed.</summary>
@@ -1051,10 +1055,12 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
 
     /// <summary>The prompt shown while unconfigured; one string because <see cref="ConfigPromptOrNull"/> and the <see cref="Resolver"/> getter's backstop must say the same thing.</summary>
     const string NotConfiguredText =
-        "houseCARL has no Mod Organizer 2 instance configured yet. Ask the user which MO2 instance folder to use — the " +
-        "folder that contains ModOrganizer.ini (for a Wabbajack / portable list, that's the list's install folder). You " +
-        "may help locate it, but do NOT silently pick one when more than one MO2 install exists: list the candidates you " +
-        "found and let the user choose. State which folder you're using, then call " + ToolNames.SetMo2Instance + " with that path.";
+        "houseCARL has no mod manager configured yet. Ask the user which one to use: a Mod Organizer 2 instance folder — " +
+        "the folder that contains ModOrganizer.ini (for a Wabbajack / portable list, that's the list's install folder) — " +
+        "or, for Amethyst Mod Manager on Linux, the game's mod folder (holding profiles/ and mods/, by default " +
+        "~/Games/Amethyst/<game>). You may help locate it, but do NOT silently pick one when more than one install exists: " +
+        "list the candidates you found and let the user choose. State which folder you're using, then call " +
+        ToolNames.SetMo2Instance + " with that path.";
 
     /// <summary>Tools call this FIRST: the unconfigured prompt as a normal result string, else null — the MCP framework rewrites a thrown exception to a generic message.</summary>
     public string? ConfigPromptOrNull() { lock (_gate) { return _configured ? null : NotConfiguredText; } }

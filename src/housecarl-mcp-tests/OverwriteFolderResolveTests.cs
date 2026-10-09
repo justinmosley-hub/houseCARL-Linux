@@ -125,7 +125,7 @@ public sealed class OverwriteFolderResolveTests : IDisposable
         Assert.Equal(tKey.FileName.String, read.WinnerPlugin);
         Assert.NotNull(read.Record);
 
-        Assert.Contains(ovw, SetupTools.Render(Mo2Instance.Resolve(instance), persisted: true, persistError: null, persistNote: null),
+        Assert.Contains(ovw, SetupTools.Render(Mo2Instance.Resolve(instance), "Mod Organizer 2", persisted: true, persistError: null, persistNote: null),
             StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -8,28 +8,29 @@ namespace HousecarlMcp;
 [McpServerToolType]
 public static class SetupTools
 {
-    [McpServerTool(Name = ToolNames.SetMo2Instance, Title = "Tell houseCARL where Mod Organizer 2 is"),
+    [McpServerTool(Name = ToolNames.SetMo2Instance, Title = "Tell houseCARL where your mod manager is"),
      Description(
-         "Point houseCARL at your Mod Organizer 2 instance folder. houseCARL derives the mods folder, the active " +
-         "profile and the game's Data folder from its ModOrganizer.ini; you never name the profile. Use it for " +
-         "first-run setup (when a tool says houseCARL isn't configured yet) and to switch to another MO2 instance. A " +
-         "folder that is not an MO2 instance changes nothing. On success houseCARL uses it from the next call and saves " +
+         "Point houseCARL at your mod manager: a Mod Organizer 2 instance folder, or for Amethyst Mod Manager (Linux) " +
+         "the game's mod folder or its config folder. houseCARL derives the mods folder, the active profile and the " +
+         "game's Data folder from the manager's own files; you never name the profile. Use it for first-run setup " +
+         "(when a tool says houseCARL isn't configured yet) and to switch to another instance or game. A folder that " +
+         "is neither changes nothing. On success houseCARL uses it from the next call and saves " +
          "it for later sessions (a failed save is reported), and returns the detected profile with an enabled-mods and " +
          "active-plugins summary.")]
     public static string SetMo2Instance(
         LoadOrderService svc,
-        [Description("Full path to the MO2 instance folder — the one containing ModOrganizer.ini (e.g. a Wabbajack list's install folder).")]
+        [Description("Full path to the MO2 instance folder — the one containing ModOrganizer.ini (e.g. a Wabbajack list's install folder) — or, for Amethyst, the game's mod folder (holding profiles/ and mods/) or its config folder (~/.config/AmethystModManager/games/<game>).")]
             string path) => Guard.Tool(ToolNames.SetMo2Instance, () =>
     {
         if (string.IsNullOrWhiteSpace(path))
-            return "error: no path given. Pass the full path to your MO2 instance folder (the one containing ModOrganizer.ini).";
+            return "error: no path given. Pass the full path to your MO2 instance folder (the one containing ModOrganizer.ini), or your Amethyst game's mod folder.";
         path = path.Trim().Trim('"');   // tolerate a copy-pasted quoted path, like every sibling path-taking tool
 
-        Mo2InstancePaths paths; bool persisted; string? persistError; string? persistNote;
-        try { (paths, persisted, persistError, persistNote) = svc.SetInstance(path); }
+        ManagerInstancePaths paths; string manager; bool persisted; string? persistError; string? persistNote;
+        try { (paths, manager, persisted, persistError, persistNote) = svc.SetInstance(path); }
         catch (InvalidOperationException ex) { return "error: " + ex.Message; }   // not a usable instance — nothing changed
 
-        return Render(paths, persisted, persistError, persistNote);
+        return Render(paths, manager, persisted, persistError, persistNote);
     });
 
     [McpServerTool(Name = ToolNames.SetToolPath, Title = "Tell houseCARL where an external tool is"),
@@ -69,16 +70,18 @@ public static class SetupTools
     });
 
     /// <summary>The confirmation text: the instance, the derived roots, the auto-detected profile, a cheap enabled/active summary, and whether the choice was persisted.</summary>
-    internal static string Render(Mo2InstancePaths p, bool persisted, string? persistError, string? persistNote)
+    internal static string Render(ManagerInstancePaths p, string manager, bool persisted, string? persistError, string? persistNote)
     {
+        bool mo2 = manager == "Mod Organizer 2";
         var sb = new StringBuilder();
-        sb.Append("configured houseCARL -> MO2 instance '").Append(p.InstanceDir).Append("'\n");
-        sb.Append("active profile: ").Append(p.ProfileName).Append("  (auto-detected from ModOrganizer.ini)\n");
+        sb.Append("configured houseCARL -> ").Append(mo2 ? "MO2 instance" : manager + " game").Append(" '").Append(p.InstanceDir).Append("'\n");
+        sb.Append("active profile: ").Append(p.ProfileName)
+          .Append(mo2 ? "  (auto-detected from ModOrganizer.ini)\n" : "  (auto-detected from Amethyst's deploy_state.json)\n");
         sb.Append("  mods folder: ").Append(p.ModsDir).Append('\n');
         sb.Append("  game Data  : ").Append(p.DataDir).Append('\n');
         // MO2 does not create the overwrite folder until a tool writes there, so an absent one is annotated.
         sb.Append("  overwrite  : ").Append(p.OverwriteDir)
-          .Append(Directory.Exists(p.OverwriteDir) ? "" : "  (none yet — MO2 creates it when a tool writes here)").Append('\n');
+          .Append(Directory.Exists(p.OverwriteDir) ? "" : "  (none yet — the manager creates it when a tool writes here)").Append('\n');
 
         // Reads the three profile text files only. A read failure here is non-fatal but is named, since this line is what tells the user the setup worked.
         try

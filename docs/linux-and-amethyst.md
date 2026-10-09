@@ -5,9 +5,9 @@ This fork runs houseCARL on Linux and reads a load order from
 written for someone who knows houseCARL, C# and Windows, and has not used Linux or Amethyst. Nothing
 here changes how houseCARL behaves on Windows.
 
-Status: the server builds and the whole test suite passes on Linux (6,570 passed, 0 failed, 11 skipped with a
-reason). Game paths, casing and file locks are handled, and every render keeps to `max_chars`. The Amethyst backend,
-writes into Amethyst, and Papyrus compile through Wine are next, in that order.
+Status: the server builds and the whole test suite passes on Linux. houseCARL **reads an Amethyst game** (roots,
+active profile, load order, assets) and picks up a profile switch, deploy or restore without a restart; it has been
+run against a real Amethyst 2.5.3 Skyrim SE install. Writing into Amethyst and Papyrus compile through Wine are next.
 
 ## What changed, and where
 
@@ -15,13 +15,15 @@ writes into Amethyst, and Papyrus compile through Wine are next, in that order.
 |---|---|---|
 | `DiskPath` / `GamePath` in core; game paths go through them | Linux file names are case-sensitive and `\` is not a separator there | [`architecture/linux-paths.md`](architecture/linux-paths.md), [ADR 0006](decisions/0006-game-paths-resolve-case-insensitively-on-linux.md) |
 | `HarnessPaths.ServerExe` in the tests | The built server has no `.exe` on Linux | the property itself |
+| `IManagerInstance`, `AmethystInstance`; the setup tool takes an MO2 or Amethyst folder | houseCARL reads Amethyst as it reads MO2 | [`architecture/amethyst-instance.md`](architecture/amethyst-instance.md), [ADR 0007](decisions/0007-amethyst-is-read-from-its-files.md) |
 | json written with `\n` on every OS (`JsonWire.Opts`) | .NET indents with the OS line break by default, so Windows and Linux returned different documents | [`architecture/json-wire.md`](architecture/json-wire.md) "One document, whatever the OS" |
 | json caveats and asset rows measured before they are written | The item that crossed `max_chars` was written whole; it showed on Linux because line-break width moved where items end | [`architecture/json-wire.md`](architecture/json-wire.md), `AssetSelectTests.NoCaveatOrRowPastTheFirstCrossesTheCeilingAtAnyCap` |
 | Every text and json write render bounded by `max_chars` (`BatchRender.AppendSections`, `RowRoom`) | Not a Linux issue: #1016's three text renders and the six json write renders answered past their cap whenever they cut | [`architecture/render-budget.md`](architecture/render-budget.md) |
 
 ## Amethyst: the rules the backend follows
 
-The Amethyst backend is not written yet. These rules bind it, and most come from an earlier port,
+The read side is done ([`architecture/amethyst-instance.md`](architecture/amethyst-instance.md)); rules 1, 2 and 7 hold
+there, and the rest bind the write side. Most come from an earlier port,
 [ni1by2/houseCARL-Amethyst](https://github.com/ni1by2/houseCARL-Amethyst) (GPL-3.0, July 2026, built on houseCARL
 1.8). Their work is credited here and in the README. We adopt their findings, not their code: that fork predates
 houseCARL 2.0.
