@@ -219,7 +219,7 @@ internal sealed partial class AssetLayers
                 else note = "provided ONLY inside a BSA — the SKSE loader scans loose Data\\SKSE\\Plugins only, so this DLL will not load";
                 if (group.Length > 0 && note is null)
                     note = $"in subfolder '{group}' — NOT on SKSE's loader path (scans SKSE\\Plugins\\*.dll top-level only); a bundled/parent-loaded DLL, not a plugin SKSE loads";
-                var entry = new SkseFileEntry(rel, Path.GetFileName(rel), group, providers, info, note, ModVersion: modVersion);
+                var entry = new SkseFileEntry(rel, GamePath.FileName(rel), group, providers, info, note, ModVersion: modVersion);
                 // String peek only for a loose winner — the copy SKSE would load (docs/architecture/skse-layer.md).
                 if (peekFilter is { Length: > 0 } && entry.MatchesDll(peekFilter)
                     && winner is { Kind: AssetKind.Loose, LooseFilePath: { } peekPath })
@@ -227,7 +227,7 @@ internal sealed partial class AssetLayers
                 dlls.Add(entry);
             }
             else
-                configs.Add(new SkseFileEntry(rel, Path.GetFileName(rel), group, providers, null, null));
+                configs.Add(new SkseFileEntry(rel, GamePath.FileName(rel), group, providers, null, null));
         }
         return new SkseInventoryData(dlls, configs, otherFiles, _host.InstalledGameRuntime(), view.BsaFailures, view.RootFailures,
             view.ReadIncomplete, warnings, profileName, activePlugins, peekFilter is { Length: > 0 });
@@ -304,7 +304,7 @@ internal sealed partial class AssetLayers
             var audited = new List<SkseAuditedRef>(extracted.Count);
             foreach (var r in extracted) audited.Add(Adjudicate(r, index));
 
-            files.Add(new SkseConfigFileAudit(rel, Path.GetFileName(rel), group,
+            files.Add(new SkseConfigFileAudit(rel, GamePath.FileName(rel), group,
                 winner?.ProviderName, providers.Count, providers, audited, readError, multiLine));
         }
         return new SkseConfigAuditData(files, files.Count, view.BsaFailures, view.RootFailures, view.ReadIncomplete, warnings, profileName);
@@ -396,7 +396,7 @@ internal sealed partial class AssetLayers
                 {
                     // PE-screen the packed copy too: a packed NotSkse dependency must not count as a candidate.
                     if (AssetResolver.TryReadArchiveEntry(winner.ArchivePath!, winner.EntryPath) is { } bytes)
-                        info = SksePluginReader.ReadBytes(Path.GetFileName(rel), bytes);
+                        info = SksePluginReader.ReadBytes(GamePath.FileName(rel), bytes);
                 }
                 catch { /* unreadable archive rides the view's BsaFailures caveat; the candidate keeps its blocker */ }
                 if (info?.Kind == SksePluginReader.SksePluginKind.NotSkse) continue;
@@ -410,7 +410,7 @@ internal sealed partial class AssetLayers
             if (blocker is null && group.Length > 0)
                 blocker = $"in subfolder '{group}' — not on SKSE's loader path (scans SKSE\\Plugins\\*.dll top-level only)";
 
-            var dll = new NativePairedDll(rel, Path.GetFileName(rel), group, winner?.ProviderName, info, blocker);
+            var dll = new NativePairedDll(rel, GamePath.FileName(rel), group, winner?.ProviderName, info, blocker);
             foreach (var src in place.Sources)
             {
                 var mod = PairingIdentity(src, archiveShipper);
@@ -992,7 +992,7 @@ internal sealed partial class AssetLayers
         int pipe = v.IndexOf('|');
         if (ModsPathAddress.Split(pipe >= 0 ? v.Substring(0, pipe) : v, modsRoot) is not { } hit) return null;
         var remedy = bothSlots
-            ? $"Address that archive instead with source_provider='{Path.GetFileName(hit.RelPath ?? v)}' and no source= — a BSA filename is a provider name, and each FaceGen slot then derives its own entry from that archive."
+            ? $"Address that archive instead with source_provider='{GamePath.FileName(hit.RelPath ?? v)}' and no source= — a BSA filename is a provider name, and each FaceGen slot then derives its own entry from that archive."
             : ModsPathAddress.Address(hit.ModFolder, hit.RelPath is null || pipe < 0 ? hit.RelPath : hit.RelPath + v.Substring(pipe),
                                       "source", "source_provider");
         return ModsPathAddress.Refusal("", v, remedy);

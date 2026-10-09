@@ -135,7 +135,7 @@ static class SkyPatcherWire
                 "  (report-only: which value SHOULD win is a merge decision — resolve by authoring a later-sorted INI via the skypatcher-authoring skill, then re-run this tool to confirm.)\n",
                 d.Conflicts, "",
                 c => "  - [" + c.Subfolder + "] " + c.Field + " @ " + c.Target + ":\n",
-                c => c.Entries.Select((e, i) => "      " + Path.GetFileName(e.File) + ":" + e.Line + "  " + e.Op + "=" + e.Value
+                c => c.Entries.Select((e, i) => "      " + GamePath.FileName(e.File) + ":" + e.Line + "  " + e.Op + "=" + e.Value
                     + (i == c.Entries.Count - 1 ? "   ← WINS (last in apply order)" : "")   // by index: value-equal entries must not both claim the win
                     + (e.Conditional ? "   [conditional — the line carries further filters]" : "") + "\n")))
             missed.Add(ReportNames[0]);
@@ -144,7 +144,7 @@ static class SkyPatcherWire
                 "\nintra-file dead writes (" + deadWrites + ") — ITM-class: later line(s) of the SAME file unconditionally re-cover EVERY target of the write, so it is dead weight regardless of value:\n",
                 "  (report-only: in YOUR ini a dead write is an authoring slip to fix at the source; in a downloaded mod's it is usually harmless — the last write is what applies. A write partially overwritten, or overwritten only by a conditional line, is NOT listed — it may still fire.)\n",
                 d.Itms, " finding(s)",
-                m => "  - [" + m.Subfolder + "] " + Path.GetFileName(m.File) + ": " + m.Field + ":\n",
+                m => "  - [" + m.Subfolder + "] " + GamePath.FileName(m.File) + ": " + m.Field + ":\n",
                 m => m.Entries.Select(e => "      :" + e.Line + "  " + e.Op + "=" + e.Value + "  @ " + e.Targets
                     + "   ← DEAD (overwritten by "
                     + string.Join(", ", e.KillerLines.Select(k => k == e.Line ? $":{k} (a later op on the same line)" : $":{k}")) + ")"
@@ -156,7 +156,7 @@ static class SkyPatcherWire
                 "  (report-only: which copy to drop is a judgment call — a BROAD line also patches every other record of the type, so removing it loses those; prefer dropping the narrower duplicate.)\n",
                 d.Duplicates, "",
                 c => "  - [" + c.Subfolder + "] " + c.Field + " @ " + c.Target + ":\n",
-                c => c.Entries.Select(e => "      " + Path.GetFileName(e.File) + ":" + e.Line + "  " + e.Op + "=" + e.Value
+                c => c.Entries.Select(e => "      " + GamePath.FileName(e.File) + ":" + e.Line + "  " + e.Op + "=" + e.Value
                     + (e.Conditional ? "   [conditional — the line carries further filters]" : "") + "\n")))
             missed.Add(ReportNames[2]);
 
@@ -164,7 +164,7 @@ static class SkyPatcherWire
                 "\nno-op writes (" + d.NoOps.Count + ") — true ITM: the SET writes the value the record already has at that point in the replay, so the op changes nothing:\n",
                 "  (report-only, and relative to THIS load order: the same line matters in an order where the record's winner differs — unlike dead writes and duplicates, a no-op is not an authoring slip in the INI itself unless you author for this order.)\n",
                 d.NoOps, "",
-                n => "  - [" + n.Subfolder + "] " + Path.GetFileName(n.File) + ":" + n.Line + "  " + n.Op + "=" + n.Value
+                n => "  - [" + n.Subfolder + "] " + GamePath.FileName(n.File) + ":" + n.Line + "  " + n.Op + "=" + n.Value
                     + " @ " + n.FormKey + (n.EditorId is null ? "" : $" ({n.EditorId})")
                     + " — " + n.FieldPath + " is already " + n.Already + "\n"))
             missed.Add(ReportNames[3]);

@@ -15,7 +15,7 @@ public sealed class AssetSelectTests : IClassFixture<AssetSelectWorld>
 
     static string[] Paths(AssetStatusData d) => d.Results.Select(r => r.RelPath).ToArray();
 
-    static string Leaf(string p) => Path.GetFileName(p);
+    static string Leaf(string p) => GamePath.FileName(p);
 
     /// <summary>The #246 measure: one call per defining master over its facegeom folder answers for the whole set —
     /// the same files, the same winners, as spelling every path out. Forty path-list calls collapse to one.</summary>
