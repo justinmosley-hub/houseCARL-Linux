@@ -85,10 +85,9 @@ public sealed class LocalizedModFolderUnreadableTests : IDisposable
         }
     }
 
-    [Fact]
+    [WindowsFact("the deny ACE that makes a folder unlistable")]
     public void AnUnlistableModFolderIsNotAFolderFoundEmpty()
     {
-        if (!OperatingSystem.IsWindows()) return;   // the deny ACE that makes a folder unlistable is Windows-only
 
         Assert.Equal(LocalizedShape.BsaEmbedded, LocalizedStrings.Assess(_plugin, _dataDir).Shape);
 

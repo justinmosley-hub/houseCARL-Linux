@@ -122,10 +122,9 @@ public sealed class LocalizedStringsSourceTests : IDisposable
     /// plugin — the same fact as an unlistable <c>Strings\</c> folder, and it takes the same answer: keep the
     /// unchanged folder-adjacent open. Swallowed as "no archives", the gate answers false and redirects a plugin
     /// whose tables may be sitting right there, which is the failure #369 was about.</summary>
-    [Fact]
+    [WindowsFact("the deny ACE that makes a folder unlistable")]
     public void AModFolderThatCannotBeListedKeepsTheUnchangedOpen()
     {
-        if (!OperatingSystem.IsWindows()) return;   // the deny ACE that makes a folder unlistable is Windows-only
         var plugin = Folder("folder-unlistable");
         var dir = new DirectoryInfo(Path.GetDirectoryName(plugin)!);
         var acl = dir.GetAccessControl();

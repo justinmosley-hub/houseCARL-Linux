@@ -184,10 +184,9 @@ public sealed class BsaPackCountTests : IDisposable
     }
 
     /// <summary>A subfolder the process cannot list throws out of the scan; the pack still runs, unchecked, and says so.</summary>
-    [Fact]
+    [WindowsFact("the deny ACE that makes a folder unlistable")]
     public void ASourceThatCannotBeListedPacksUncheckedInsteadOfRefusing()
     {
-        if (!OperatingSystem.IsWindows()) return;   // the deny ACE that makes a folder unlistable is Windows-only
         var src = Source("unlistable");
         WriteFile(src, Path.Combine("meshes", "a.nif"));
         var denied = Path.Combine(src, "denied");

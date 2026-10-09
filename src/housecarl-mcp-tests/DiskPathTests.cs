@@ -52,10 +52,9 @@ public sealed class DiskPathTests : IDisposable
         Assert.Equal(Path.Combine(_root, elsewhere), DiskPath.Combine(_root, elsewhere));
     }
 
-    [Fact]
+    [CaseSensitiveDiskFact]
     public void ACaseOnlyTwinPrefersTheExactSpelling()
     {
-        if (OperatingSystem.IsWindows()) return;   // NTFS cannot hold 'meshes' and 'Meshes' side by side
         Directory.CreateDirectory(Path.Combine(_root, "Meshes"));
 
         Assert.Equal(Path.Combine(_root, "Meshes"), DiskPath.Combine(_root, "Meshes"));

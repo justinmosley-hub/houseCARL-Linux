@@ -42,6 +42,10 @@ dotnet test src/housecarl-mcp-tests -c Release --no-build
 The server is an ASP.NET app, and Arch ships the ASP.NET runtime as its own package; without it every
 test that starts the server aborts with "framework Microsoft.AspNetCore.App not found".
 
+A test that cannot run on one OS is marked so it reports as **skipped**, never as passed: `[WindowsFact("what Linux
+lacks")]` for Windows-only behaviour, `[CaseSensitiveDiskFact]` for one that needs a case-sensitive disk. Never `return`
+early from a test body: that reports a pass for a test that did not run.
+
 Not done yet: about 150 tests still assume Windows (`C:\` paths, ACL denial, `where.exe`, the Windows
 installer). Each is being made per-OS, or skipped on Linux with a reason where Linux cannot reproduce it.
 

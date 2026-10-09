@@ -150,10 +150,9 @@ public sealed class LocalizedUnclassifiableDestinationTests
     // Probe: an unlistable Strings folder classifies as its own shape, NOT as Nowhere; its refusal asserts no absence
     // over a folder houseCARL could not read and says the folder could not be read; with the deny lifted the same
     // folder classifies as the loose set it is.
-    [Fact]
+    [WindowsFact("the deny ACE that makes a folder unlistable")]
     public void AnUnlistableStringsFolderIsNotAFolderFoundEmpty()
     {
-        if (!OperatingSystem.IsWindows()) return;   // the deny ACE that makes a folder unlistable is Windows-only
         using var f = new F(A.LooseComplete);
         var strings = Path.Combine(f.ModDir, "Strings");
         var listed = LocalizedStrings.Assess(f.Plugin, f.DataDir);
