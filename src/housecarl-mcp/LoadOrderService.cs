@@ -18,6 +18,14 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     readonly UserConfigStore _store;               // the sole owner of houseCARL.user.json (MO2 instance dir + tool paths)
     readonly InPlaceConsent _inPlaceConsent;       // the in-place consent over _store; writes and assets take it through the door
     InPlaceConsent ILoadOrderHost.InPlaceConsent => _inPlaceConsent;
+
+    string? ILoadOrderHost.DeployedNote(string writtenPath)
+    {
+        IManagerInstance? instance;
+        lock (_gate) instance = _instance;
+        try { return instance?.DeployedNote(writtenPath); }
+        catch (Exception ex) { return $"could not check what the game reads for {Path.GetFileName(writtenPath)} ({ex.GetType().Name}) — the edit itself succeeded."; }
+    }
     readonly int _maxPlugins;
     readonly object _gate = new();
     readonly OutputLocations _outputLocations;     // the output area; built in the constructor over this head

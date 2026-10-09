@@ -67,6 +67,79 @@ public sealed class AmethystWriteTests : IDisposable
         Assert.Contains("extended HcAwFix.esp", answer);
     }
 
+    string OwnMods => Path.Combine(_a.ProfileDir(), "mods");
+
+    /// <summary>A mod in the profile's own mods folder whose plugin overrides the master's weapon, enabled.</summary>
+    void OwnModWithItsPlugin()
+    {
+        var key = new ModKey("HcAwOwn", ModType.Plugin);
+        var path = Path.Combine(OwnMods, "OwnMod", key.FileName.String);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using (var ov = SkyrimMod.CreateFromBinaryOverlay(Path.Combine(_a.DataDir, _master.FileName.String), SkyrimRelease.SkyrimSE))
+        {
+            var own = new SkyrimMod(key, SkyrimRelease.SkyrimSE);
+            WriteEngine.GenericGetOrAddAsOverride(own, ov.Weapons.First(), ov.ToImmutableLinkCache());
+            own.BeginWrite.ToPath(path).WithLoadOrder(new[] { ov }).NoNextFormIDProcessing().Write();
+        }
+        _a.Profile("HcAwMaster.esm\nHcAwOwn.esp\n", "*HcAwOwn.esp\n", "+OwnMod\n");
+    }
+
+    string EditInPlace(LoadOrderService svc) =>
+        ApplyTools.Apply(svc, ops: Doc($"[{{\"formid\":\"{_weapon}\",\"field_path\":\"BasicStats.Damage\",\"value\":\"77\"}}]"),
+                         in_place: "HcAwOwn.esp", acknowledge: true);
+
+    [Fact]
+    public void AnInPlaceEditOfAnUndeployedProfileSaysTheGameSeesItAfterADeploy()
+    {
+        OwnModWithItsPlugin();
+        using var svc = _a.Open();
+
+        Assert.Contains("Amethyst has not deployed this profile, so the game sees this edit after a Deploy in Amethyst.", EditInPlace(svc));
+    }
+
+    [LinuxFact("Amethyst's link deploy is Linux; Windows needs admin rights for symlinks")]
+    public void AnInPlaceEditBehindASymlinkIsAlreadyWhatTheGameSees()
+    {
+        OwnModWithItsPlugin();
+        _a.Deploy(ScratchAmethyst.Link.Symlink, OwnMods, "OwnMod");
+        using var svc = _a.Open();
+
+        Assert.Contains("the game already sees this edit: Amethyst deployed 'HcAwOwn.esp' as a link to this file.", EditInPlace(svc));
+    }
+
+    [LinuxFact("Amethyst's hardlink deploy is Linux")]
+    public void AnInPlaceEditBehindAHardlinkSaysTheGameStillReadsTheOldFile()
+    {
+        OwnModWithItsPlugin();
+        _a.Deploy(ScratchAmethyst.Link.Hardlink, OwnMods, "OwnMod");
+        using var svc = _a.Open();
+
+        var answer = EditInPlace(svc);
+
+        Assert.Contains("the game does NOT see this edit yet: the file Amethyst deployed at 'HcAwOwn.esp' is the one from before it", answer);
+        Assert.Contains("Deploy in Amethyst to pick it up", answer);
+    }
+
+    [LinuxFact("Amethyst's link deploy is Linux")]
+    public void AnInPlaceEditBehindACopySaysTheGameStillReadsTheOldFile()
+    {
+        OwnModWithItsPlugin();
+        _a.Deploy(ScratchAmethyst.Link.Copy, OwnMods, "OwnMod");
+        using var svc = _a.Open();
+
+        Assert.Contains("the game does NOT see this edit yet", EditInPlace(svc));
+    }
+
+    [LinuxFact("Amethyst's link deploy is Linux; Windows needs admin rights for symlinks")]
+    public void AnInPlaceEditOfAModDeployedWithoutItSaysTheGameSeesItOnlyAfterADeploy()
+    {
+        OwnModWithItsPlugin();
+        _a.Deploy(ScratchAmethyst.Link.Symlink, OwnMods);   // deployed before the mod was enabled
+        using var svc = _a.Open();
+
+        Assert.Contains("the deployed Data has no 'HcAwOwn.esp', so the game sees this edit only after a Deploy in Amethyst.", EditInPlace(svc));
+    }
+
     [Fact]
     public void StatusAndSetupSayWhatAmethystDoesDifferently()
     {

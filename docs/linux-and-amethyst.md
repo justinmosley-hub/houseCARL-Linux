@@ -22,8 +22,8 @@ run against a real Amethyst 2.5.3 Skyrim SE install. Writing into Amethyst and P
 
 ## Amethyst: the rules the backend follows
 
-The read side is done ([`architecture/amethyst-instance.md`](architecture/amethyst-instance.md)); rules 1, 2 and 7 hold
-there, and the rest bind the write side. Most come from an earlier port,
+Reading and writing are done ([`architecture/amethyst-instance.md`](architecture/amethyst-instance.md)); how each rule
+is met is in *Status*. Most come from an earlier port,
 [ni1by2/houseCARL-Amethyst](https://github.com/ni1by2/houseCARL-Amethyst) (GPL-3.0, July 2026, built on houseCARL
 1.8). Their work is credited here and in the README. We adopt their findings, not their code: that fork predates
 houseCARL 2.0.
@@ -43,11 +43,23 @@ houseCARL 2.0.
 7. **Both staging layouts** are supported: shared staging and profile-specific staging. A `*`-locked mod is enabled.
 8. **No Skyrim game data in CI.** Testing against a real game uses a disposable profile, with backups first.
 
+**Status.** Rules 1, 2, 3, 7 and 8 hold as written. The others are met this way:
+- **4:** upstream's per-plugin consent applies unchanged, the write lands in staging, and every in-place answer says
+  whether the game now reads the edit (rule 5). There is no separate `confirm_amethyst_redeploy` parameter: it would
+  add a parameter to four published tools for a fact the answer already states, and the consent prompt still stops a
+  first touch. Nothing yet keeps an edit marked pending across calls; the answer is the record.
+- **5:** the check reads the file actually deployed at the plugin's place in Data. A symlink to the written file, or a
+  file with the same bytes, means the game reads the edit; anything else means it does not. Comparing bytes rather
+  than inodes answers the question asked ("does the game read this edit") and needs no platform call.
+- **6:** symlink, hardlink and copy deploys are each tested (`AmethystWriteTests`); the user's own install deploys by
+  symlink. VFS mode is recognised and named, not tested against a real VFS.
+
 **Amethyst's file database.** Current Amethyst tracks which mod provides each file in a versioned SQLite database,
 the *filegraph* (`native/amethyst_filegraph/src/schema.rs` and `src/Utils/filegraph/service.py` in Amethyst), not
 in `filemap.txt` as it used to. Its tables include `profiles` (with a `generation` counter), `winners` and
-`deployed_entries`. The backend reads it read-only, checks the schema version and the generation, and refuses a
-stale or partial view. This finding is also ni1by2's (their hand-off note of 2026-10-02).
+`deployed_entries`. This finding is also ni1by2's (their hand-off note of 2026-10-02). houseCARL does not need it:
+reads use Amethyst's plain files ([ADR 0007](decisions/0007-amethyst-is-read-from-its-files.md)), and the deploy check
+reads the deployed files themselves, which is what the game reads.
 
 ## Windows → Linux, for this codebase
 

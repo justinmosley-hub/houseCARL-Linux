@@ -161,6 +161,70 @@ public static class AmethystInstance
     static bool OwnMods(JsonElement settings) =>
         settings.TryGetProperty("profile_specific_mods", out var own) && own.ValueKind == JsonValueKind.True;
 
+    /// <summary>Whether the game reads <paramref name="writtenPath"/> as houseCARL just rewrote it, judged from the file actually
+    /// deployed at its place in the game's Data, never from the deploy mode Amethyst was asked for. A rewrite replaces the
+    /// file, so a symlink to it sees the new one while a hardlink or copy keeps the old. Null for a path outside the
+    /// profile's mods, overwrite and game Data. Contract in docs/architecture/amethyst-instance.md.</summary>
+    public static string? DeployedNote(string gameConfigDir, string writtenPath)
+    {
+        if (!TryResolve(gameConfigDir, out var p) || p is null) return null;
+        var rel = DataRelative(writtenPath, p);
+        if (rel is null) return null;
+        var deployedData = Path.Combine(p.GamePath, "Data");
+        if (PathEquals(p.DataDir, deployedData))
+        {
+            if (IsUnder(writtenPath, p.DataDir)) return null;   // the game's own Data, read directly
+            return VfsEnabled(gameConfigDir)
+                ? "Amethyst serves mods through its VFS, so the game sees this edit the next time Amethyst launches it."
+                : "Amethyst has not deployed this profile, so the game sees this edit after a Deploy in Amethyst.";
+        }
+        var deployed = DiskPath.Combine(deployedData, rel);
+        if (!File.Exists(deployed))
+            return $"the deployed Data has no '{rel}', so the game sees this edit only after a Deploy in Amethyst.";
+        if (File.ResolveLinkTarget(deployed, returnFinalTarget: true) is { } target && PathEquals(target.FullName, writtenPath))
+            return $"the game already sees this edit: Amethyst deployed '{rel}' as a link to this file.";
+        if (SameBytes(deployed, writtenPath))
+            return $"the game already sees this edit: the file Amethyst deployed at '{rel}' matches it.";
+        return $"the game does NOT see this edit yet: the file Amethyst deployed at '{rel}' is the one from before it (a hardlink " +
+               "or copy keeps the old file, or another mod wins it) — Deploy in Amethyst to pick it up.";
+    }
+
+    /// <summary>The path as the game's Data sees it: below a mod folder, the overwrite folder, or the game's own Data.</summary>
+    static string? DataRelative(string path, ManagerInstancePaths p)
+    {
+        if (IsUnder(path, p.ModsDir))
+        {
+            var inMods = Path.GetRelativePath(p.ModsDir, path);
+            var cut = inMods.IndexOf(Path.DirectorySeparatorChar);
+            return cut < 0 ? null : inMods[(cut + 1)..];
+        }
+        if (IsUnder(path, p.OverwriteDir)) return Path.GetRelativePath(p.OverwriteDir, path);
+        if (IsUnder(path, p.DataDir)) return Path.GetRelativePath(p.DataDir, path);
+        return null;
+    }
+
+    static bool IsUnder(string path, string root) =>
+        root.Length > 0 && Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+
+    static bool SameBytes(string a, string b)
+    {
+        using var fa = File.OpenRead(a);
+        using var fb = File.OpenRead(b);
+        if (fa.Length != fb.Length) return false;
+        var ba = new byte[81920]; var bb = new byte[81920];
+        int n;
+        while ((n = fa.Read(ba, 0, ba.Length)) > 0)
+        {
+            fb.ReadExactly(bb, 0, n);
+            if (!ba.AsSpan(0, n).SequenceEqual(bb.AsSpan(0, n))) return false;
+        }
+        return true;
+    }
+
+    static bool VfsEnabled(string gameConfigDir) =>
+        ReadJson(Path.Combine(gameConfigDir, GameSettingsFileName), null, GameSettingsFileName) is { } g
+        && g.TryGetProperty("vfs_enabled", out var v) && v.ValueKind == JsonValueKind.True;
+
     /// <summary>Deployed by links or copies (not VFS, which leaves Data alone on disk) with no Data_Core backup beside it.</summary>
     static bool DeployedWithoutBackup(string gameConfigDir, string gamePath)
     {
@@ -212,7 +276,7 @@ public static class AmethystInstance
 
     static bool PathEquals(string a, string b)
     {
-        try { return string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)), b, StringComparison.Ordinal); }
+        try { return string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparison.Ordinal); }
         catch { return false; }
     }
 }
@@ -226,6 +290,7 @@ public sealed class AmethystManagerInstance(string gameConfigDir) : IManagerInst
     public string Location { get; } = gameConfigDir;
     public bool PartialLoadOrder => true;
     public string? WorkflowNote => AmethystInstance.WorkflowNote;
+    public string? DeployedNote(string writtenPath) => AmethystInstance.DeployedNote(Location, writtenPath);
     public string ModsDirFor(string profileDir, string activeModsDir) => AmethystInstance.ModsDirFor(profileDir);
 
     public ManagerInstancePaths Resolve() => AmethystInstance.Resolve(Location);

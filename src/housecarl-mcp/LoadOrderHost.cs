@@ -47,4 +47,8 @@ internal interface ILoadOrderHost
 
     /// <summary>The in-place consent over the user config store, one per service.</summary>
     InPlaceConsent InPlaceConsent { get; }
+
+    /// <summary>After an in-place rewrite of <paramref name="writtenPath"/>: whether the game reads it, from the manager
+    /// (<see cref="IManagerInstance.DeployedNote"/>); null when there is nothing to say. Best-effort, never throws.</summary>
+    string? DeployedNote(string writtenPath);
 }

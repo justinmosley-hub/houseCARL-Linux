@@ -88,6 +88,20 @@ Amethyst's profile files. What Amethyst then does, read from its source:
   and writes `key = value`. The ownership check (`HousecarlOwnerMeta.MarksOwned`) ignores case and spaces, so a
   patch stays houseCARL's.
 
+### After an in-place edit: what the game reads
+An in-place write replaces the plugin's file (a staged temp renamed over it), so the file gets a new identity. What
+the game then reads depends on how Amethyst put that file into Data, and houseCARL checks the file actually there
+rather than the deploy mode Amethyst was asked for (`AmethystInstance.DeployedNote`, through
+`IManagerInstance.DeployedNote` and the host's `DeployedNote`). Every in-place lane (edit, create, remove, forward, and
+compact over its source and each plugin it repoints) adds one sentence:
+- a symlink to the written file, or a deployed file with the same bytes: the game already reads the edit;
+- a hardlink or copy (it keeps the file from before), or a file another mod wins: the game does not read it yet, and
+  a Deploy picks it up;
+- nothing deployed at that path, or the profile not deployed: the game reads it after a Deploy;
+- VFS mode: the game reads it the next time Amethyst launches it.
+A file in the game's own Data, read directly while nothing is deployed, gets no sentence. MO2 serves its files to the
+game live, so MO2's answer is null and its output is unchanged.
+
 houseCARL's messages were written for MO2 and say "MO2" (about 195 of them, spread over many renderers). Rather than
 reword each, the manager says once what differs: `IManagerInstance.WorkflowNote`, shown under `manager:` in
 `housecarl_load_order_status` and in the setup tool's answer. For Amethyst it says the messages mean Amethyst, where a
@@ -102,8 +116,10 @@ new mod appears, and that a Deploy is needed. MO2's is null, so MO2 output is un
   restore and profile switch are picked up without a restart, a switch between a profile with its own mods and one
   with the shared mods swaps both ways, and another profile is read from its own mods folder without switching.
 - `AmethystWriteTests` — a new patch lands in the active profile's own mods folder and never the shared one, stays
-  houseCARL's after its `meta.ini` is rewritten in `configparser`'s format (an `into=` extends it), and the status and
-  setup answers carry the Amethyst note while MO2's carry none.
+  houseCARL's after its `meta.ini` is rewritten in `configparser`'s format (an `into=` extends it), the status and
+  setup answers carry the Amethyst note while MO2's carry none, and an in-place edit says what the game reads for each
+  deploy: not deployed, symlink, hardlink, copy, and a deploy that left the mod out. The deploy tests are
+  `[LinuxFact]`: Amethyst is Linux-only, and Windows needs admin rights to create symlinks.
 - `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
   files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.
 - `StatusInstanceProfileTests` and the MO2 resolve tests hold that MO2 is unchanged.

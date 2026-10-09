@@ -57,23 +57,42 @@ sealed class ScratchAmethyst
     public void ProfileSettings(string settingsJson, string profile = "default") =>
         File.WriteAllText(Path.Combine(ProfileDir(profile), "profile_state.json"), "{\"profile_settings\": " + settingsJson + "}");
 
+    /// <summary>How a deploy puts a file into Data, as Amethyst's deploy modes do.</summary>
+    public enum Link { Symlink, Hardlink, Copy }
+
     /// <summary>What a link deploy does: Data moves to Data_Core, and a new Data holds symlinks — to every enabled
     /// mod's files and to the game's own — and deploy_state records it.</summary>
-    public void Deploy(params string[] enabledMods)
+    public void Deploy(params string[] enabledMods) => Deploy(Link.Symlink, ModsDir, enabledMods);
+
+    /// <summary>As <see cref="Deploy(string[])"/>, linking each file the way <paramref name="link"/> says, from the mods in
+    /// <paramref name="modsDir"/>; a later mod wins a path an earlier one also has. Hardlinks are Linux-only here.</summary>
+    public void Deploy(Link link, string modsDir, params string[] enabledMods)
     {
         Directory.Move(DataDir, DataCore);
         Directory.CreateDirectory(DataDir);
-        foreach (var dir in new[] { DataCore }.Concat(enabledMods.Select(m => Path.Combine(ModsDir, m))))
+        foreach (var dir in new[] { DataCore }.Concat(enabledMods.Select(m => Path.Combine(modsDir, m))))
             foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
             {
-                var link = Path.Combine(DataDir, Path.GetRelativePath(dir, file));
-                Directory.CreateDirectory(Path.GetDirectoryName(link)!);
-                if (File.Exists(link)) File.Delete(link);
-                File.CreateSymbolicLink(link, file);
+                if (Path.GetFileName(file) == "meta.ini") continue;   // a mod's own metadata is never deployed
+                var placed = Path.Combine(DataDir, Path.GetRelativePath(dir, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(placed)!);
+                if (File.Exists(placed)) File.Delete(placed);
+                switch (link)
+                {
+                    case Link.Symlink: File.CreateSymbolicLink(placed, file); break;
+                    case Link.Copy: File.Copy(file, placed); break;
+                    case Link.Hardlink:
+                        if (HardLink(file, placed) != 0) throw new IOException($"link() failed for '{placed}'");
+                        break;
+                }
             }
         File.WriteAllText(Path.Combine(GameConfig, "deploy_state.json"),
-            "{\"last_active_profile\": \"default\", \"last_deployed\": \"default\", \"deploy_active\": true, \"last_deploy_mode\": \"SYMLINK\"}");
+            "{\"last_active_profile\": \"default\", \"last_deployed\": \"default\", \"deploy_active\": true, \"last_deploy_mode\": \"" +
+            link.ToString().ToUpperInvariant() + "\"}");
     }
+
+    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "link", SetLastError = true)]
+    static extern int HardLink(string existing, string created);
 
     /// <summary>What a restore does: the deployed Data goes, Data_Core moves back, and deploy_state records it.</summary>
     public void Restore()

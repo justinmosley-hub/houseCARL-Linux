@@ -332,11 +332,17 @@ internal sealed partial class RecordWrites
                     + "source's .STRINGS files do not describe it, and any language it shipped that this read did not "
                     + "resolve is not in the output. Read the output before you enable it in place of the original.");
             if (flagOnlyNote is not null) markerNotes.Add(flagOnlyNote);
-            if (inPlace) { var n = MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(srcPath)); if (n is not null) markerNotes.Add(n); }
+            if (inPlace)
+            {
+                if (MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(srcPath)) is { } n) markerNotes.Add(n);
+                if (_host.DeployedNote(srcPath) is { } d) markerNotes.Add(d);
+            }
             foreach (var r in repointed.Where(r => r.Success))
             {
                 var rp = view.PluginPath(r.Plugin);
-                if (rp is not null) { var n = MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(rp)); if (n is not null) markerNotes.Add(n); }
+                if (rp is null) continue;
+                if (MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(rp)) is { } n) markerNotes.Add(n);
+                if (_host.DeployedNote(rp) is { } d) markerNotes.Add($"{r.Plugin}: {d}");
             }
 
             return new WritePatchBuilder.CompactOutcome(

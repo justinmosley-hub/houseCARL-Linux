@@ -327,8 +327,9 @@ internal sealed partial class RecordWrites
             ackNote = _host.InPlaceConsent.Persist(owesConsent, targetPath, "edit");
             var markerNote = MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(targetPath));
             var seqNote = SeqStaleInPlaceNote(targetPath, targetName);
+            var deployNote = _host.DeployedNote(targetPath);
             // outcome.Note first — the core's master-grow re-sort note must survive the merge.
-            var note = JoinNotes(outcome.Note, ackNote, markerNote, seqNote);
+            var note = JoinNotes(outcome.Note, ackNote, markerNote, seqNote, deployNote);
             if (note is not null) return outcome with { Note = note };
         }
         return outcome;
@@ -544,8 +545,9 @@ internal sealed partial class RecordWrites
             var ackNote = _host.InPlaceConsent.Persist(owesConsent, targetPath, "removal");
             var markerNote = MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(targetPath));
             var seqNote = SeqStaleInPlaceNote(targetPath, targetName);
+            var deployNote = _host.DeployedNote(targetPath);
             // outcome.Note first — the core's master-grow re-sort note must survive the merge.
-            var note = JoinNotes(outcome.Note, ackNote, markerNote, seqNote);
+            var note = JoinNotes(outcome.Note, ackNote, markerNote, seqNote, deployNote);
             if (note is not null) return outcome with { Note = note };
         }
         return outcome;
@@ -680,8 +682,9 @@ internal sealed partial class RecordWrites
             ackNote = _host.InPlaceConsent.Persist(owesConsent, targetPath, "forward");
             var markerNote = MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(targetPath));
             var seqNote = SeqStaleInPlaceNote(targetPath, targetName);
+            var deployNote = _host.DeployedNote(targetPath);
             // outcome.Note first — the core's master-grow re-sort note must survive the merge.
-            var note = JoinNotes(outcome.Note, ackNote, markerNote, seqNote);
+            var note = JoinNotes(outcome.Note, ackNote, markerNote, seqNote, deployNote);
             if (note is not null) return outcome with { Note = note };
         }
         return outcome;

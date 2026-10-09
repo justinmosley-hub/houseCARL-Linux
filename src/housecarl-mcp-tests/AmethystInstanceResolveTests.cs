@@ -71,7 +71,7 @@ public sealed class AmethystInstanceResolveTests : IDisposable
         SamePath(Path.Combine(other, "Data"), AmethystInstance.Resolve(_a.GameConfig).DataDir);
     }
 
-    [Fact]
+    [LinuxFact("Amethyst's link deploy is Linux; Windows needs admin rights for symlinks")]
     public void WhileDeployedTheGameIsReadFromDataCoreNeverTheDeployedData()
     {
         _a.Deploy();
@@ -150,7 +150,7 @@ public sealed class AmethystInstanceResolveTests : IDisposable
         finally { mo2.Delete(); }
     }
 
-    [Fact]
+    [LinuxFact("Amethyst's link deploy is Linux; Windows needs admin rights for symlinks")]
     public void TheFingerprintMovesOnAProfileSwitchADeployAndARestore()
     {
         var instance = new AmethystManagerInstance(_a.GameConfig);

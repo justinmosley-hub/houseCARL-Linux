@@ -17,6 +17,10 @@ public interface IManagerInstance
     /// <summary>What a caller must know about this manager that houseCARL's MO2-worded messages do not say; null for MO2.</summary>
     string? WorkflowNote { get; }
 
+    /// <summary>After houseCARL rewrote <paramref name="writtenPath"/> in place: whether the game reads the new file, in one
+    /// sentence, or null when the manager serves its files to the game live (MO2) or the path is none of its files.</summary>
+    string? DeployedNote(string writtenPath);
+
     /// <summary>The folder this instance was configured with.</summary>
     string Location { get; }
 

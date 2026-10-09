@@ -71,7 +71,7 @@ public sealed class AmethystLoadOrderTests : IDisposable
         Assert.Contains("HcAmMaster.esm", data.Composition.ImplicitPluginNames);
     }
 
-    [Fact]
+    [LinuxFact("Amethyst's link deploy is Linux; Windows needs admin rights for symlinks")]
     public void WhileDeployedThePatchHasOneCopyAndTheMasterIsReadFromDataCore()
     {
         _a.Deploy("PatchMod");
@@ -84,7 +84,7 @@ public sealed class AmethystLoadOrderTests : IDisposable
         Assert.Equal("HcAmPatch.esp", Winner(svc));
     }
 
-    [Fact]
+    [LinuxFact("Amethyst's link deploy is Linux; Windows needs admin rights for symlinks")]
     public void ADeployAndARestoreArePickedUpWithoutARestart()
     {
         using var svc = _a.Open();

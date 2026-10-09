@@ -163,7 +163,7 @@ internal sealed partial class RecordWrites
             var enriched = EnrichWithCellShell(EnrichWithScriptCheck(EnrichWithVoiceCheck(outcome, resolver)));
             var markerNote = MergeEditedInPlaceMarker(roots, Path.GetDirectoryName(targetPath));
             // enriched.Note FIRST, as the other in-place lanes join: the core's master-grow note must survive.
-            var note = JoinNotes(enriched.Note, ackNote, markerNote);
+            var note = JoinNotes(enriched.Note, ackNote, markerNote, _host.DeployedNote(targetPath));
             return note is not null ? enriched with { Note = note } : enriched;
         }
         return outcome;
