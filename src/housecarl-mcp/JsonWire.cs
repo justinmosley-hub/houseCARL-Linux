@@ -9,9 +9,11 @@ namespace HousecarlMcp;
 /// SAME outcome objects, so text and JSON differ only in formatting; contracts in docs/architecture/json-wire.md.</summary>
 static class JsonWire
 {
-    /// <summary>The options every json response is written under: indented, and the server's one text encoder.</summary>
+    /// <summary>The options every json response is written under: indented, and the server's one text encoder. The line
+    /// break is pinned to '\n', as the text renders write it; left unset it is the OS's own, so a document's length,
+    /// and every max_chars cut, would differ between Windows and Linux.</summary>
     internal static readonly JsonWriterOptions Opts =
-        new() { Indented = true, Encoder = JsonTextEncoder.Encoder };
+        new() { Indented = true, Encoder = JsonTextEncoder.Encoder, NewLine = "\n" };
 
     /// <summary>The same options, so <see cref="CheckAccounting"/> measures its reserve in the encoding it will be written in.</summary>
     internal static JsonWriterOptions WriterOptions => Opts;
