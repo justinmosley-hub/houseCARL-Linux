@@ -72,7 +72,9 @@ public static class PapyrusCompile
         // The prior .pex's write-time (null means none): the baseline "this run wrote it" is decided against.
         DateTime? pexBeforeUtc = File.Exists(pexPath) ? File.GetLastWriteTimeUtc(pexPath) : null;
 
-        var psi = WindowsTool.StartInfo(compilerExe, wine);   // through Wine off Windows
+        var (psi, noWine) = WindowsTool.Start(compilerExe, needsDotNet: true, wine);   // through Wine off Windows
+        if (psi is null)
+            return new CompileResult(false, objectName, null, Array.Empty<PapyrusDiagnostic>(), "", "", -1, noWine);
         psi.ArgumentList.Add(objectName);
         psi.ArgumentList.Add($"-f={flagsFile}");
         // One arg: ';' is the compiler's import-dir list separator, and .NET quotes the whole value.

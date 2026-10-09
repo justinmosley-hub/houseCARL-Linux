@@ -285,7 +285,8 @@ public static class BsaArchive
 
     static (bool ran, int exit, string stdout, string stderr, string? runError) Run(string exe, IReadOnlyList<string> args, int timeoutMs, string? wine)
     {
-        var psi = WindowsTool.StartInfo(exe, wine);   // through Wine off Windows
+        var (psi, noWine) = WindowsTool.Start(exe, needsDotNet: false, wine);   // through Wine off Windows
+        if (psi is null) return (false, -1, "", "", noWine);
         foreach (var a in args) psi.ArgumentList.Add(a);   // one arg each; .NET quotes spaces/semicolons
 
         Process p;

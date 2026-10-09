@@ -41,11 +41,12 @@ public sealed class WindowsToolTests : IDisposable
     [LinuxFact("Windows programs run through Wine off Windows")]
     public void TheProgramRunsThroughWineInItsPrefixWithWinesOwnLogOff()
     {
-        var psi = WindowsTool.StartInfo("/ck/PapyrusCompiler.exe", wine: "/opt/proton/bin/wine", prefix: "/home/me/.local/share/hc-prefix");
+        var prefix = Path.Combine(_root, "hc-prefix");
+        var psi = WindowsTool.Start("/ck/PapyrusCompiler.exe", needsDotNet: true, wine: "/opt/proton/bin/wine", prefix: prefix).Start!;
 
         Assert.Equal("/opt/proton/bin/wine", psi.FileName);
         Assert.Equal("/ck/PapyrusCompiler.exe", psi.ArgumentList[0]);
-        Assert.Equal("/home/me/.local/share/hc-prefix", psi.Environment["WINEPREFIX"]);
+        Assert.Equal(prefix, psi.Environment["WINEPREFIX"]);
         Assert.Equal("-all", psi.Environment["WINEDEBUG"]);
         Assert.Equal("/ck", psi.WorkingDirectory);
     }
@@ -111,5 +112,18 @@ public sealed class WindowsToolTests : IDisposable
 
     [LinuxFact("the test run's stand-in for Wine is installed off Windows")]
     public void TheTestRunNeverStartsTheRealWine() =>
-        Assert.Equal(NoRealWine.PassThrough, WindowsTool.Wine);
+        Assert.Equal(new WindowsTool.WineChoice(NoRealWine.PassThrough!, "HOUSECARL_WINE"), WindowsTool.FindWine(needsDotNet: true));
+
+    [LinuxFact("the default prefix is the user's data folder off Windows")]
+    public void TheDefaultPrefixIsHouseCarlsOwnInTheUsersDataFolder()
+    {
+        // The user's data folder: XDG_DATA_HOME when set, else ~/.local/share.
+        var data = Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } xdg ? xdg
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
+        Assert.Equal(Path.Combine(data, "houseCARL", "wineprefix"), WindowsTool.DefaultPrefix);
+    }
+
+    [LinuxFact("the test run's stand-in prefix is installed off Windows")]
+    public void TheTestRunNeverTouchesARealPrefix() =>
+        Assert.StartsWith(Path.GetTempPath(), WindowsTool.Prefix);
 }

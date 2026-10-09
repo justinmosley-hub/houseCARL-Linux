@@ -68,15 +68,17 @@ houseCARL starts two Windows programs: the Creation Kit's `PapyrusCompiler.exe` 
 `BSArch.exe` (`housecarl_bsa_repack`). On Linux, `WindowsTool` starts them through Wine and hands each folder path over
 on Wine's `Z:` drive (`/home/me/x` is `Z:\home\me\x`), which every prefix maps to `/`.
 
-| Setting | What it does | Default |
-|---|---|---|
-| `HOUSECARL_WINE` | The Wine to run them with | `wine` on PATH |
-| `HOUSECARL_WINEPREFIX` | The Wine prefix (its private "Windows install") they run in | Wine's own: `WINEPREFIX`, else `~/.wine` |
+**Nothing to set up.** Every Linux Skyrim player has Steam's Proton, so houseCARL uses it: on each start it finds the
+newest Proton in any Steam library (Proton carries the Mono the compiler, a .NET program, needs), so a Proton update or
+a new version is followed by itself. It runs them in its own prefix (a prefix is Wine's private "Windows install"),
+never a game's; Wine creates it on first use in a few seconds. Without Proton it falls back to `wine` on PATH where
+that can run the program, and otherwise says where it looked. [ADR 0008](decisions/0008-windows-tools-run-through-wine.md)
+has the order and why houseCARL does not download Wine itself.
 
-The compiler is a .NET Framework program, so its Wine needs Mono: install the `wine-mono` package, or point
-`HOUSECARL_WINE` at Proton's Wine (`<Steam>/steamapps/common/Proton <version>/files/bin/wine`), which carries its own.
-Give houseCARL its own prefix rather than a game's, so the compiler never changes the game's prefix. The first compile
-in a new prefix takes a while as Wine sets it up. BSArch needs no Mono.
+| Setting (optional) | What it does | Default |
+|---|---|---|
+| `HOUSECARL_WINE` | Use this Wine instead | the newest Steam Proton, then `wine` on PATH |
+| `HOUSECARL_WINEPREFIX` | Run in this prefix instead | `~/.local/share/houseCARL/wineprefix` |
 
 Getting the compiler: install **Skyrim Special Edition: Creation Kit** from Steam into the same game folder. It adds
 `Papyrus Compiler/PapyrusCompiler.exe` and the vanilla script sources (`Data/Scripts.zip`, to extract to
@@ -122,7 +124,7 @@ How the suite runs on Linux, for someone who wrote it on Windows:
 | expects ERROR_SHARING_VIOLATION (32) for a file another process holds | gets EWOULDBLOCK (11); both mean "in use, retry" | `FileInUse` (core) |
 | writes `C:\...` for an absolute path | uses `/C/...` | `HarnessPaths.Rooted` |
 | copies `where.exe` as a failing BSArch | uses a shell script that exits 2 | `BsaPackContractTests` |
-| runs BSArch or the compiler directly | runs them through a stand-in Wine that runs the program it is handed, so no test starts the real Wine | `NoRealWine`; `WindowsToolTests` record what Wine is handed |
+| runs BSArch or the compiler directly | runs them through a stand-in Wine that runs the program it is handed, in a temp prefix, so no test starts the real Wine or writes under the user's home | `NoRealWine`; `WindowsToolTests` record what Wine is handed; `WineFinderTests` find Proton in a fake Steam |
 | reads `System32\kernel32.dll` | reads Wine's `kernel32.dll`, a real PE; skipped without Wine | `[NativeDllFact]` |
 
 Skipped on Linux, each with its reason: the five Papyrus compile tests (no `PapyrusCompiler.exe`, as on Windows CI),

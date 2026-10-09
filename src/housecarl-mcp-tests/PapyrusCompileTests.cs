@@ -55,11 +55,12 @@ public sealed class PapyrusCompilerFactAttribute : FactAttribute
             ? set
             : @"E:\SteamLibrary\steamapps\common\Skyrim Special Edition\Papyrus Compiler\PapyrusCompiler.exe";
 
-    /// <summary>Off Windows, the Wine these tests run the real compiler through: <c>HOUSECARL_TEST_WINE</c> if set, else
-    /// <c>wine</c> on PATH. Named here because the test run's own <c>HOUSECARL_WINE</c> is a stand-in (<see cref="NoRealWine"/>);
-    /// set <c>HOUSECARL_WINEPREFIX</c> too, or Wine uses <c>~/.wine</c>.</summary>
+    /// <summary>Off Windows, the Wine these tests run the real compiler through: <c>HOUSECARL_TEST_WINE</c> if set, else the
+    /// Proton the product would find. Named here because the test run's own <c>HOUSECARL_WINE</c> is a stand-in
+    /// (<see cref="NoRealWine"/>); the prefix is the run's temp one.</summary>
     public static string? RealWine => OperatingSystem.IsWindows() ? null
-        : Environment.GetEnvironmentVariable("HOUSECARL_TEST_WINE") is { Length: > 0 } set ? set : "wine";
+        : Environment.GetEnvironmentVariable("HOUSECARL_TEST_WINE") is { Length: > 0 } set ? set
+        : WindowsTool.Protons(WindowsTool.SteamRoots()).FirstOrDefault()?.Path ?? "wine";
 
     public PapyrusCompilerFactAttribute()
     {
