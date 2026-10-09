@@ -49,8 +49,16 @@ name; houseCARL follows the game's `Skyrim.ccc` order instead. Plugins Amethyst'
 leaves them out too.
 
 The rule is the manager's: `IManagerInstance.PartialLoadOrder` is true for Amethyst and false for MO2, travels with
-the roots (`Mo2Roots.PartialLoadOrder`), and every composition read takes it. MO2's `loadorder.txt` lists everything,
-so MO2 profiles are read exactly as before.
+the roots (`Mo2Roots.PartialLoadOrder`, a required member so no place that builds roots can leave it out), and every
+composition read takes it, including the re-reads after a profile switch or a profile-file change. MO2's
+`loadorder.txt` lists everything, so MO2 profiles are read exactly as before.
+
+### Profiles with their own mods, and profiles sharing them
+A profile with `profile_specific_mods` reads mods and overwrite inside its own folder; every other profile of the game
+shares the staging root's. A switch between the two kinds moves the mods folder, and the service re-resolves under the
+new one on the next call, so one profile's mods are never seen from the other. Reading a profile other than the active
+one (`profile=` on the status tool) uses that profile's own mods folder (`IManagerInstance.ModsDirFor`); MO2's profiles
+all share the instance's.
 
 ### Locked mods
 A `*Name` line in `modlist.txt` is Amethyst's enabled-and-locked mod, and counts as enabled when that mod folder
@@ -72,8 +80,9 @@ Stamps compare by exact ticks (`FileStamp.Key`), never the second-rounded defaul
   default, profile-specific mods, a profile's game path, Data_Core while deployed, the refusals, the default staging
   root, finding a game from its staging folder, telling the managers apart, and the fingerprint moving.
 - `AmethystLoadOrderTests` — the service end to end with real plugins: the mod's override wins, a plugin listed only in
-  `plugins.txt` loads, a deployed patch has one copy (never Data's link), and a deploy, restore and profile switch are
-  picked up without a restart.
+  `plugins.txt` loads, a plugin ticked mid-session loads, a deployed patch has one copy (never Data's link), a deploy,
+  restore and profile switch are picked up without a restart, a switch between a profile with its own mods and one
+  with the shared mods swaps both ways, and another profile is read from its own mods folder without switching.
 - `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
   files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.
 - `StatusInstanceProfileTests` and the MO2 resolve tests hold that MO2 is unchanged.

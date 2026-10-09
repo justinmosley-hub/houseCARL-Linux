@@ -22,6 +22,10 @@ public interface IManagerInstance
     /// panel last saved; MO2's lists everything.</summary>
     bool PartialLoadOrder { get; }
 
+    /// <summary>The mods folder of the profile at <paramref name="profileDir"/>, for reading a profile other than the
+    /// active one: MO2's profiles share <paramref name="activeModsDir"/>; an Amethyst profile can have its own.</summary>
+    string ModsDirFor(string profileDir, string activeModsDir);
+
     /// <summary>Derive the roots, or THROW naming every missing piece; never half-derived paths.</summary>
     ManagerInstancePaths Resolve();
 

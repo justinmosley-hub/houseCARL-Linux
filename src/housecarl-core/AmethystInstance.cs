@@ -117,7 +117,7 @@ public static class AmethystInstance
         // A profile's settings may give it its own mods/overwrite folders and its own game install (Amethyst's
         // profile_specific_mods and per-profile game_path).
         if (ProfileSettings(profileDir, problems) is not { } settings) return null;
-        bool ownMods = settings.TryGetProperty("profile_specific_mods", out var own) && own.ValueKind == JsonValueKind.True;
+        bool ownMods = OwnMods(settings);
         var gamePath = Str(settings, "game_path") is { Length: > 0 } profileGame ? profileGame : Str(paths, "game_path");
         var modsDir = ownMods ? Path.Combine(profileDir, "mods") : Path.Combine(root, "mods");
         var overwriteDir = ownMods ? Path.Combine(profileDir, "overwrite") : Path.Combine(root, "overwrite");
@@ -142,6 +142,18 @@ public static class AmethystInstance
                   && Directory.Exists(dataDir) && !DeployedWithoutBackup(gameConfigDir, gamePath!);
         return ok ? new ManagerInstancePaths(gameConfigDir, profile, profileDir, modsDir, dataDir, gamePath!, overwriteDir) : null;
     }
+
+    /// <summary>A profile's mods folder: its own when its settings say profile_specific_mods, else the staging root's.</summary>
+    public static string ModsDirFor(string profileDir)
+    {
+        profileDir = Path.TrimEndingDirectorySeparator(profileDir);
+        if (ProfileSettings(profileDir, null) is { } settings && OwnMods(settings)) return Path.Combine(profileDir, "mods");
+        var root = Path.GetDirectoryName(Path.GetDirectoryName(profileDir)) ?? "";
+        return Path.Combine(root, "mods");
+    }
+
+    static bool OwnMods(JsonElement settings) =>
+        settings.TryGetProperty("profile_specific_mods", out var own) && own.ValueKind == JsonValueKind.True;
 
     /// <summary>Deployed by links or copies (not VFS, which leaves Data alone on disk) with no Data_Core backup beside it.</summary>
     static bool DeployedWithoutBackup(string gameConfigDir, string gamePath)
@@ -207,6 +219,7 @@ public sealed class AmethystManagerInstance(string gameConfigDir) : IManagerInst
     public string Manager => "Amethyst";
     public string Location { get; } = gameConfigDir;
     public bool PartialLoadOrder => true;
+    public string ModsDirFor(string profileDir, string activeModsDir) => AmethystInstance.ModsDirFor(profileDir);
 
     public ManagerInstancePaths Resolve() => AmethystInstance.Resolve(Location);
     public bool TryResolve(out ManagerInstancePaths? paths) => AmethystInstance.TryResolve(Location, out paths);

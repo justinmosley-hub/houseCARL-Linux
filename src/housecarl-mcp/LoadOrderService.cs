@@ -765,14 +765,14 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     /// <summary>Inspect a named profile's composition without switching to it, off the cheap text-only <see cref="Mo2LoadOrder.ReadComposition"/>. Instance mode only; an unmatched name is reported with the available ones.</summary>
     public NamedProfileResult NamedProfileComposition(string? requested)
     {
-        string? instanceDir; string profilesRoot, modsDir, dataDir; bool partial;
+        string? instanceDir; string profilesRoot, modsDir, dataDir; bool partial; IManagerInstance? instance;
         lock (_gate)
         {
             if (!_configured) throw NotConfigured();              // fresh install → the tool returns the prompt for the MO2 path
             EnsurePathsDerived();                                 // instance mode: derive the active ProfileDir (cheap ini read; throws if the instance is unusable)
             instanceDir = _instance?.Location;
             profilesRoot = instanceDir is null ? "" : (Path.GetDirectoryName(_profileDir.TrimEnd('\\', '/')) ?? "");
-            modsDir = _modsDir; dataDir = _dataDir; partial = _instance?.PartialLoadOrder == true;
+            modsDir = _modsDir; dataDir = _dataDir; partial = _instance?.PartialLoadOrder == true; instance = _instance;
         }
 
         var name = string.IsNullOrWhiteSpace(requested) ? null : requested.Trim();
@@ -789,7 +789,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
 
         var dir = Path.Combine(profilesRoot, match);
         var warnings = new List<string>();                       // read notes (e.g. a missing modlist.txt), so a 0-mod profile is not mistaken for empty
-        var comp = Mo2LoadOrder.ReadComposition(dir, modsDir, dataDir, partial, warnings);  // cheap text parse of THAT profile's loadorder/modlist/plugins — no index build, no switch
+        var comp = Mo2LoadOrder.ReadComposition(dir, instance?.ModsDirFor(dir, modsDir) ?? modsDir, dataDir, partial, warnings);  // cheap text parse of THAT profile's loadorder/modlist/plugins — no index build, no switch
         return new NamedProfileResult(true, available, match, dir, comp, warnings);
     }
 
@@ -831,7 +831,7 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     {
         if (RederiveIfIniChanged()) return;                      // instance mode: a profile switch was published, or held for the next call
         if (!ProfileFilesChanged()) { _profileHeld = null; return; }   // matches its baseline again → nothing pending, nothing to say
-        ReResolve(new(ProfileDir: _profileDir, DataDir: _dataDir, ModsDir: _modsDir, OverwriteDir: _overwriteDir));
+        ReResolve(RootsLocked());
     }
 
     /// <summary>Instance mode only: when the manager's own files moved the roots (an MO2 ini rewrite; an Amethyst profile
@@ -847,7 +847,8 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
                         || !PathEq(p.OverwriteDir, _overwriteDir);
         if (!switched) { _instanceFingerprint = fingerprint; return false; }   // touched, but nothing we resolve from changed
         // A new profile's order that is held or empty keeps the old roots, resolver and ini stamp, so the next call retries.
-        if (!ReResolve(new(ProfileDir: p.ProfileDir, DataDir: p.DataDir, ModsDir: p.ModsDir, OverwriteDir: p.OverwriteDir))) return true;
+        if (!ReResolve(new(ProfileDir: p.ProfileDir, DataDir: p.DataDir, ModsDir: p.ModsDir, OverwriteDir: p.OverwriteDir,
+                           PartialLoadOrder: _instance.PartialLoadOrder))) return true;
         _instanceFingerprint = fingerprint;                       // advance only once the new roots are published
         _profileDir = p.ProfileDir; _modsDir = p.ModsDir; _dataDir = p.DataDir; _profileName = p.ProfileName; _overwriteDir = p.OverwriteDir;
         System.Threading.Interlocked.Increment(ref _gameRootsGen);   // the game roots moved → the runtime memo re-probes

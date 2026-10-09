@@ -27,19 +27,34 @@ public sealed class AmethystLoadOrderTests : IDisposable
         master.Weapons.Add(new Weapon(_weapon, SkyrimRelease.SkyrimSE) { EditorID = "HcAmWeapon", BasicStats = new WeaponBasicStats { Damage = 5 } });
         var masterPath = Path.Combine(_a.DataDir, _master.FileName.String);
         master.BeginWrite.ToPath(masterPath).WithLoadOrder(Array.Empty<ISkyrimModGetter>()).Write();
-        using (var ov = SkyrimMod.CreateFromBinaryOverlay(masterPath, SkyrimRelease.SkyrimSE))
-        {
-            var patch = new SkyrimMod(_patch, SkyrimRelease.SkyrimSE);
-            var w = (Weapon)WriteEngine.GenericGetOrAddAsOverride(patch, ov.Weapons.First(), ov.ToImmutableLinkCache());
-            w.BasicStats!.Damage = 42;
-            patch.BeginWrite.ToPath(_a.InMod("PatchMod", _patch)).WithLoadOrder(new[] { ov }).NoNextFormIDProcessing().Write();
-        }
+        WriteOverride(_patch, _a.InMod("PatchMod", _patch));
         // As Amethyst writes them for Skyrim SE: every plugin in loadorder.txt, base-game ones left out of plugins.txt.
         _a.Profile("HcAmMaster.esm\nHcAmPatch.esp\n", "*HcAmPatch.esp\n", "+PatchMod\n");
         File.WriteAllText(Path.Combine(_a.ProfileDir(), "Skyrim.ini"), "[Archive]\nsResourceArchiveList=\n");
     }
 
     public void Dispose() => _a.Delete();
+
+    /// <summary>A plugin overriding the master's weapon, written to <paramref name="path"/>.</summary>
+    void WriteOverride(ModKey key, string path)
+    {
+        using var ov = SkyrimMod.CreateFromBinaryOverlay(Path.Combine(_a.DataDir, _master.FileName.String), SkyrimRelease.SkyrimSE);
+        var patch = new SkyrimMod(key, SkyrimRelease.SkyrimSE);
+        var w = (Weapon)WriteEngine.GenericGetOrAddAsOverride(patch, ov.Weapons.First(), ov.ToImmutableLinkCache());
+        w.BasicStats!.Damage = 42;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        patch.BeginWrite.ToPath(path).WithLoadOrder(new[] { ov }).NoNextFormIDProcessing().Write();
+    }
+
+    /// <summary>A second profile, "Testing", with its own mods folder holding one mod whose plugin overrides the weapon;
+    /// its loadorder.txt is as Amethyst seeds it, so the plugin is only in plugins.txt.</summary>
+    void TestingProfileWithItsOwnMods()
+    {
+        _a.Profile("HcAmMaster.esm\n", "*HcAmOwn.esp\n", "*OwnMod\n", profile: "Testing");
+        File.WriteAllText(Path.Combine(_a.ProfileDir("Testing"), "Skyrim.ini"), "[Archive]\nsResourceArchiveList=\n");
+        _a.ProfileSettings("{\"profile_specific_mods\": true}", profile: "Testing");
+        WriteOverride(new ModKey("HcAmOwn", ModType.Plugin), Path.Combine(_a.ProfileDir("Testing"), "mods", "OwnMod", "HcAmOwn.esp"));
+    }
 
     string Winner(LoadOrderService svc) =>
         JsonDocument.Parse(RecordsTools.Records(svc, formids: new[] { $"{_weapon.ID:X6}:{_master.FileName}" }, format: "json"))
@@ -109,6 +124,49 @@ public sealed class AmethystLoadOrderTests : IDisposable
 
         Assert.Equal("HcAmPatch.esp", Winner(svc));
         Assert.Equal(2, svc.StatusData().ResolvedPluginCount);
+    }
+
+    [Fact]
+    public void SwitchingBetweenAProfileWithItsOwnModsAndOneWithTheSharedModsSwapsBothWays()
+    {
+        TestingProfileWithItsOwnMods();
+        using var svc = _a.Open();
+        Assert.Equal("HcAmPatch.esp", Winner(svc));
+
+        _a.Activate("Testing");
+        Assert.Equal("HcAmOwn.esp", Winner(svc));                // read from Testing's own mods folder, order completed
+        var testing = ((ILoadOrderHost)svc).CaptureRoots();
+        Assert.Equal(Path.Combine(_a.ProfileDir("Testing"), "mods"), testing.ModsDir);
+        Assert.Equal(2, svc.StatusData().ResolvedPluginCount);    // the shared folder's patch is not in this profile
+
+        _a.Activate("default");
+        Assert.Equal("HcAmPatch.esp", Winner(svc));
+        Assert.Equal(_a.ModsDir, ((ILoadOrderHost)svc).CaptureRoots().ModsDir);
+    }
+
+    [Fact]
+    public void APluginEnabledInAmethystMidSessionIsPickedUp()
+    {
+        _a.Profile("HcAmMaster.esm\n", "HcAmPatch.esp\n", "+PatchMod\n");
+        using var svc = _a.Open();
+        Assert.Equal("HcAmMaster.esm", Winner(svc));
+
+        File.WriteAllText(Path.Combine(_a.ProfileDir(), "plugins.txt"), "*HcAmPatch.esp\n");   // ticked in Amethyst's plugin panel
+
+        Assert.Equal("HcAmPatch.esp", Winner(svc));
+    }
+
+    [Fact]
+    public void AnotherProfileIsReadFromItsOwnModsFolderWithoutSwitching()
+    {
+        TestingProfileWithItsOwnMods();
+        using var svc = _a.Open();
+
+        var other = svc.NamedProfileComposition("Testing");
+
+        Assert.Equal(new[] { "OwnMod" }, other.Composition!.EnabledMods);   // a locked mod, found in Testing's own folder
+        Assert.Contains("HcAmOwn.esp", other.Composition.ActivePluginNames);
+        Assert.Equal("default", svc.StatusData().ProfileName);
     }
 
     [Fact]

@@ -132,7 +132,7 @@ public sealed class NativePairingProvenanceTests
 
     static string? Layer(string archivePath) =>
         PluginPaths.LayerOfInstallPath(archivePath, new Mo2Roots(ProfileDir: "", DataDir: HarnessPaths.Rooted(@"D:\g\Data"),
-                                                       ModsDir: HarnessPaths.Rooted(@"E:\mo2\mods"), OverwriteDir: HarnessPaths.Rooted(@"E:\mo2\overwrite")));
+                                                       ModsDir: HarnessPaths.Rooted(@"E:\mo2\mods"), OverwriteDir: HarnessPaths.Rooted(@"E:\mo2\overwrite"), PartialLoadOrder: false));
 
     [Fact] // probe: "archive under mods\<mod>\ → that mod"
     public void AnArchiveUnderAModFolderIsThatMod() => Assert.Equal("moreHUD SE", Layer(HarnessPaths.Rooted(@"E:\mo2\mods\moreHUD SE\AHZmoreHUD.bsa")));
