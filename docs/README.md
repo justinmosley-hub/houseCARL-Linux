@@ -127,3 +127,4 @@ Grouped to match the "Where things live" table in [CLAUDE.md](../CLAUDE.md), so 
 | [`decisions/0005-the-1x-tools-are-deleted-not-deprecated.md`](decisions/0005-the-1x-tools-are-deleted-not-deprecated.md) | The 1.x tools are deleted, not deprecated. |
 | [`decisions/0006-game-paths-resolve-case-insensitively-on-linux.md`](decisions/0006-game-paths-resolve-case-insensitively-on-linux.md) | Game paths resolve case-insensitively on Linux, through one helper in core. |
 | [`decisions/0007-amethyst-is-read-from-its-files.md`](decisions/0007-amethyst-is-read-from-its-files.md) | Amethyst is read from its files, behind one manager interface chosen by what the folder holds. |
+| [`decisions/0008-windows-tools-run-through-wine.md`](decisions/0008-windows-tools-run-through-wine.md) | Windows tools (the Papyrus compiler, BSArch) run through Wine, handed `Z:` paths, chosen by environment. |

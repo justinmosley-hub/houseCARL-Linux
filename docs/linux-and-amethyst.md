@@ -18,6 +18,7 @@ run against a real Amethyst 2.5.3 Skyrim SE install. Writing into Amethyst and P
 | `IManagerInstance`, `AmethystInstance`; the setup tool takes an MO2 or Amethyst folder; `ReadComposition` takes the mods and Data folders and the manager's `PartialLoadOrder` | houseCARL reads Amethyst as it reads MO2; Amethyst's `loadorder.txt` can be partial, so its order is completed the way the game loads | [`architecture/amethyst-instance.md`](architecture/amethyst-instance.md), [ADR 0007](decisions/0007-amethyst-is-read-from-its-files.md) |
 | json written with `\n` on every OS (`JsonWire.Opts`) | .NET indents with the OS line break by default, so Windows and Linux returned different documents | [`architecture/json-wire.md`](architecture/json-wire.md) "One document, whatever the OS" |
 | json caveats and asset rows measured before they are written | The item that crossed `max_chars` was written whole; it showed on Linux because line-break width moved where items end | [`architecture/json-wire.md`](architecture/json-wire.md), `AssetSelectTests.NoCaveatOrRowPastTheFirstCrossesTheCeilingAtAnyCap` |
+| `WindowsTool` in core starts the Papyrus compiler and BSArch | They are Windows programs: on Linux they run through Wine, handed paths on its `Z:` drive | *Windows tools through Wine* below, [ADR 0008](decisions/0008-windows-tools-run-through-wine.md) |
 | Every text and json write render bounded by `max_chars` (`BatchRender.AppendSections`, `RowRoom`) | Not a Linux issue: #1016's three text renders and the six json write renders answered past their cap whenever they cut | [`architecture/render-budget.md`](architecture/render-budget.md) |
 
 ## Amethyst: the rules the backend follows
@@ -61,6 +62,26 @@ in `filemap.txt` as it used to. Its tables include `profiles` (with a `generatio
 reads use Amethyst's plain files ([ADR 0007](decisions/0007-amethyst-is-read-from-its-files.md)), and the deploy check
 reads the deployed files themselves, which is what the game reads.
 
+## Windows tools through Wine
+
+houseCARL starts two Windows programs: the Creation Kit's `PapyrusCompiler.exe` (`housecarl_compile_script`) and
+`BSArch.exe` (`housecarl_bsa_repack`). On Linux, `WindowsTool` starts them through Wine and hands each folder path over
+on Wine's `Z:` drive (`/home/me/x` is `Z:\home\me\x`), which every prefix maps to `/`.
+
+| Setting | What it does | Default |
+|---|---|---|
+| `HOUSECARL_WINE` | The Wine to run them with | `wine` on PATH |
+| `HOUSECARL_WINEPREFIX` | The Wine prefix (its private "Windows install") they run in | Wine's own: `WINEPREFIX`, else `~/.wine` |
+
+The compiler is a .NET Framework program, so its Wine needs Mono: install the `wine-mono` package, or point
+`HOUSECARL_WINE` at Proton's Wine (`<Steam>/steamapps/common/Proton <version>/files/bin/wine`), which carries its own.
+Give houseCARL its own prefix rather than a game's, so the compiler never changes the game's prefix. The first compile
+in a new prefix takes a while as Wine sets it up. BSArch needs no Mono.
+
+Getting the compiler: install **Skyrim Special Edition: Creation Kit** from Steam into the same game folder. It adds
+`Papyrus Compiler/PapyrusCompiler.exe` and the vanilla script sources (`Data/Scripts.zip`, to extract to
+`Data/Source/Scripts`). Then `housecarl_set_tool_path tool='papyrus_compiler'` with the `.exe`'s path, as on Windows.
+
 ## Windows → Linux, for this codebase
 
 | On Windows | On Linux | What it means here |
@@ -101,6 +122,7 @@ How the suite runs on Linux, for someone who wrote it on Windows:
 | expects ERROR_SHARING_VIOLATION (32) for a file another process holds | gets EWOULDBLOCK (11); both mean "in use, retry" | `FileInUse` (core) |
 | writes `C:\...` for an absolute path | uses `/C/...` | `HarnessPaths.Rooted` |
 | copies `where.exe` as a failing BSArch | uses a shell script that exits 2 | `BsaPackContractTests` |
+| runs BSArch or the compiler directly | runs them through a stand-in Wine that runs the program it is handed, so no test starts the real Wine | `NoRealWine`; `WindowsToolTests` record what Wine is handed |
 | reads `System32\kernel32.dll` | reads Wine's `kernel32.dll`, a real PE; skipped without Wine | `[NativeDllFact]` |
 
 Skipped on Linux, each with its reason: the five Papyrus compile tests (no `PapyrusCompiler.exe`, as on Windows CI),

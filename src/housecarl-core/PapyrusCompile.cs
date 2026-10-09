@@ -6,7 +6,7 @@ namespace HousecarlCore;
 /// <summary>One compiler diagnostic parsed off PapyrusCompiler's stderr; <see cref="ToString"/> renders it as "name(line,col): message" with the file's basename.</summary>
 public sealed record PapyrusDiagnostic(string File, int Line, int Col, string Message)
 {
-    public override string ToString() => $"{System.IO.Path.GetFileName(File)}({Line},{Col}): {Message}";
+    public override string ToString() => $"{GamePath.FileName(File)}({Line},{Col}): {Message}";   // a Windows path under Wine too
 }
 
 /// <summary>The outcome of one compile; what <see cref="RunError"/> and <see cref="Success"/> each mean is in docs/architecture/papyrus.md.</summary>
@@ -66,33 +66,25 @@ public static class PapyrusCompile
     /// the success signal and the stream handling are in docs/architecture/papyrus.md.</summary>
     public static CompileResult CompileObject(
         string compilerExe, string objectName, IReadOnlyList<string> importDirs, string outputDir,
-        string flagsFile = "TESV_Papyrus_Flags.flg", int timeoutMs = 120_000)
+        string flagsFile = "TESV_Papyrus_Flags.flg", int timeoutMs = 120_000, string? wine = null)
     {
         var pexPath = Path.Combine(outputDir, objectName + ".pex");
         // The prior .pex's write-time (null means none): the baseline "this run wrote it" is decided against.
         DateTime? pexBeforeUtc = File.Exists(pexPath) ? File.GetLastWriteTimeUtc(pexPath) : null;
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = compilerExe,
-            WorkingDirectory = Path.GetDirectoryName(compilerExe) ?? Environment.CurrentDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
+        var psi = WindowsTool.StartInfo(compilerExe, wine);   // through Wine off Windows
         psi.ArgumentList.Add(objectName);
         psi.ArgumentList.Add($"-f={flagsFile}");
         // One arg: ';' is the compiler's import-dir list separator, and .NET quotes the whole value.
-        psi.ArgumentList.Add($"-i={string.Join(";", importDirs)}");
-        psi.ArgumentList.Add($"-o={outputDir}");
+        psi.ArgumentList.Add($"-i={string.Join(";", importDirs.Select(WindowsTool.PathArg))}");
+        psi.ArgumentList.Add($"-o={WindowsTool.PathArg(outputDir)}");
 
         Process proc;
         try { proc = Process.Start(psi)!; }
         catch (Exception ex)
         {
             return new CompileResult(false, objectName, null, Array.Empty<PapyrusDiagnostic>(), "", "", -1,
-                $"could not run the Papyrus compiler at '{compilerExe}': {ex.Message}");
+                WindowsTool.CouldNotStart("the Papyrus compiler", compilerExe, psi, ex));
         }
 
         const int StreamDrainMs = 5000;

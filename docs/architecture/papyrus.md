@@ -62,6 +62,18 @@ The decompiler itself is [`papyrus-decompile.md`](papyrus-decompile.md).
 - The "symbol could not be resolved" wording is its own class, distinct from a syntax error, and a
   failure dominated by it leads with the import-path hint instead of reading as code bugs.
 
+### On Linux
+- The compiler runs through Wine (`WindowsTool`), and the `-i=` and `-o=` folders are handed over on Wine's `Z:`
+  drive; the object name and `-f=` are names, not paths, and pass as they are. Setup and the Wine settings are in
+  [`../linux-and-amethyst.md`](../linux-and-amethyst.md) "Windows tools through Wine"; why, in
+  [ADR 0008](../decisions/0008-windows-tools-run-through-wine.md).
+- A diagnostic names its file by a Windows path (`Z:\…\X.psc(4,5): …`); `PapyrusDiagnostic` reads the file name with
+  `GamePath.FileName`, which splits on either separator.
+- A failed start names the Wine it was started through and how to point houseCARL at another.
+- Pinned by `WindowsToolTests` (what Wine is handed, the `.pex` found, a Windows-path diagnostic, a missing Wine) with
+  a recording stand-in for Wine; `PapyrusCompileEndToEndTests` run the real compiler through the real Wine when
+  `HOUSECARL_PAPYRUS_COMPILER` names it.
+
 ### The class hierarchy
 - The child→parent map is a SOFT dependency: a missing or partial map only leaves explicit casts in
   the output, which is correct and compilable, so every loader degrades to fewer edges, never a

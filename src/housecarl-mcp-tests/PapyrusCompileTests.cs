@@ -55,6 +55,12 @@ public sealed class PapyrusCompilerFactAttribute : FactAttribute
             ? set
             : @"E:\SteamLibrary\steamapps\common\Skyrim Special Edition\Papyrus Compiler\PapyrusCompiler.exe";
 
+    /// <summary>Off Windows, the Wine these tests run the real compiler through: <c>HOUSECARL_TEST_WINE</c> if set, else
+    /// <c>wine</c> on PATH. Named here because the test run's own <c>HOUSECARL_WINE</c> is a stand-in (<see cref="NoRealWine"/>);
+    /// set <c>HOUSECARL_WINEPREFIX</c> too, or Wine uses <c>~/.wine</c>.</summary>
+    public static string? RealWine => OperatingSystem.IsWindows() ? null
+        : Environment.GetEnvironmentVariable("HOUSECARL_TEST_WINE") is { Length: > 0 } set ? set : "wine";
+
     public PapyrusCompilerFactAttribute()
     {
         if (!File.Exists(Compiler))
@@ -91,7 +97,8 @@ public sealed class PapyrusCompileEndToEndTests : IDisposable
         Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(PapyrusCompilerFactAttribute.Compiler))!, "Data", "Source", "Scripts");
 
     CompileResult Compile(string name) =>
-        PapyrusCompile.CompileObject(PapyrusCompilerFactAttribute.Compiler, name, new[] { _work, Vanilla }, _out);
+        PapyrusCompile.CompileObject(PapyrusCompilerFactAttribute.Compiler, name, new[] { _work, Vanilla }, _out,
+                                     wine: PapyrusCompilerFactAttribute.RealWine);
 
     // probe: "vanilla sources derived from compiler dir exist"
     [PapyrusCompilerFact]

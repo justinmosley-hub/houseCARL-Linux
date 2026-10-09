@@ -175,7 +175,7 @@ public static class BsaArchive
     /// the pack goes to a houseCARL scratch and the target is touched only after a clean run whose header count
     /// agrees with the source scan — the provenance rule in docs/architecture/assets.md. The caller must surface
     /// BSArch's caveat that a COMPRESSED archive breaks any sounds or voices in it.</summary>
-    public static BsaPackResult Pack(string bsarchExe, string srcFolder, string archive, string formatFlag, bool compress, int timeoutMs = 600_000, BsaPacker? packer = null)
+    public static BsaPackResult Pack(string bsarchExe, string srcFolder, string archive, string formatFlag, bool compress, int timeoutMs = 600_000, BsaPacker? packer = null, string? wine = null)
     {
         var nothing = Array.Empty<string>();
         // Pack to a scratch sibling (keeps the .bsa extension so BSArch is happy); the real target is touched only on success.
@@ -195,7 +195,7 @@ public static class BsaArchive
         try { scan = ScanPackSource(srcFolder); }
         catch { scan = null; }
 
-        var run = (packer ?? ShellBsArch)(bsarchExe, srcFolder, tmp, formatFlag, compress, timeoutMs);
+        var run = (packer ?? ((exe, src, dst, flag, z, ms) => ShellBsArch(exe, src, dst, flag, z, ms, wine)))(bsarchExe, srcFolder, tmp, formatFlag, compress, timeoutMs);
 
         // A non-zero exit is a failed pack whatever it left behind, including a scratch whose count happens to agree.
         if (run.runError is null && run.exit != 0)
@@ -275,27 +275,22 @@ public static class BsaArchive
     };
 
     static (int exit, string stdout, string stderr, string? runError) ShellBsArch(
-        string bsarchExe, string srcFolder, string tmpArchive, string formatFlag, bool compress, int timeoutMs)
+        string bsarchExe, string srcFolder, string tmpArchive, string formatFlag, bool compress, int timeoutMs, string? wine)
     {
-        var args = new List<string> { "pack", srcFolder, tmpArchive, formatFlag, "-mt" };
+        var args = new List<string> { "pack", WindowsTool.PathArg(srcFolder), WindowsTool.PathArg(tmpArchive), formatFlag, "-mt" };
         if (compress) args.Add("-z");
-        var run = Run(bsarchExe, args, timeoutMs);
+        var run = Run(bsarchExe, args, timeoutMs, wine);
         return (run.exit, run.stdout, run.stderr, run.runError);
     }
 
-    static (bool ran, int exit, string stdout, string stderr, string? runError) Run(string exe, IReadOnlyList<string> args, int timeoutMs)
+    static (bool ran, int exit, string stdout, string stderr, string? runError) Run(string exe, IReadOnlyList<string> args, int timeoutMs, string? wine)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = exe,
-            WorkingDirectory = Path.GetDirectoryName(exe) ?? Environment.CurrentDirectory,
-            RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
-        };
+        var psi = WindowsTool.StartInfo(exe, wine);   // through Wine off Windows
         foreach (var a in args) psi.ArgumentList.Add(a);   // one arg each; .NET quotes spaces/semicolons
 
         Process p;
         try { p = Process.Start(psi)!; }
-        catch (Exception ex) { return (false, -1, "", "", $"could not run BSArch at '{exe}': {ex.Message}"); }
+        catch (Exception ex) { return (false, -1, "", "", WindowsTool.CouldNotStart("BSArch", exe, psi, ex)); }
 
         const int StreamDrainMs = 5000;
         var o = p.StandardOutput.ReadToEndAsync();
