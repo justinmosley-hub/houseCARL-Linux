@@ -122,6 +122,15 @@ reword each, the manager says once what differs: `IManagerInstance.WorkflowNote`
 `housecarl_load_order_status` and in the setup tool's answer. For Amethyst it says the messages mean Amethyst, where a
 new mod appears, and that a Deploy is needed. MO2's is null, so MO2 output is unchanged.
 
+A session reads the server's standing instructions before any tool answer, and those name MO2 twice. They are within
+5 characters of Claude Code's 2,048-character cut, so nothing can be added; instead a server started with an Amethyst
+game saved (`Program.ForManager`) says "via an Amethyst game" and "until the user enables its mod and Deploys" in
+those two places. A server configured during the session has already published its instructions; the setup tool's
+answer carries the note then. MO2's instructions are upstream's, unchanged.
+
+A dry run takes Amethyst's operation lock like any call to a writing tool (the lock is per tool call, not per file
+written), so the lock file can appear before anything is written. It is empty, and Amethyst creates the same file.
+
 ## Pinned by
 - `AmethystInstanceResolveTests` — every rule above on a synthetic setup: the roots, the active profile and its
   default, profile-specific mods, a profile's game path, Data_Core while deployed, the refusals, the default staging
@@ -137,6 +146,8 @@ new mod appears, and that a Deploy is needed. MO2's is null, so MO2 output is un
   held, a write is refused by name and writes nothing, then lands once it is free; while houseCARL writes, the lock
   cannot be taken; and a write leaves it free. The deploy tests are
   `[LinuxFact]`: Amethyst is Linux-only, and Windows needs admin rights to create symlinks.
+- `AmethystServerInstructionsTests` — the real server started on an Amethyst game publishes Amethyst's words, no
+  "MO2", inside the cut; `ServerInstructionsTests` holds the default text.
 - `AmethystPluginOrderTests` — the completed order (game plugins in `Skyrim.ccc` order, then `plugins.txt`), the same
   files read as MO2 unchanged, a complete order left alone, a missing one left empty and named, and locked mods.
 - `StatusInstanceProfileTests` and the MO2 resolve tests hold that MO2 is unchanged.

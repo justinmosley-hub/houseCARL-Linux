@@ -19,6 +19,9 @@ public sealed partial class LoadOrderService : IDisposable, IAssetHost, ICheckHo
     readonly InPlaceConsent _inPlaceConsent;       // the in-place consent over _store; writes and assets take it through the door
     InPlaceConsent ILoadOrderHost.InPlaceConsent => _inPlaceConsent;
 
+    /// <summary>The configured manager's name ("Mod Organizer 2" or "Amethyst"), or null when none is configured.</summary>
+    public string? Manager { get { lock (_gate) return _instance?.Manager; } }
+
     /// <summary>The configured manager's write lock (<see cref="IManagerInstance.HoldForWrite"/>), or no hold when none is configured.</summary>
     public IDisposable HoldManagerForWrite()
     {

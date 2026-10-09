@@ -23,7 +23,7 @@ if (useHttp)
 {
     var builder = WebApplication.CreateBuilder(hostArgs);
     var (svc, explicitMode, instanceDir, instanceSource, configNote) = SetupHouseCarl(builder.Configuration, builder.Services);
-    AddMcp(builder.Services, stdio: false, maxSchemaDepth);
+    AddMcp(builder.Services, stdio: false, maxSchemaDepth, svc.Manager);
 
     var app = builder.Build();
     app.MapMcp();
@@ -47,7 +47,7 @@ else
     builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 
     var (svc, explicitMode, instanceDir, instanceSource, configNote) = SetupHouseCarl(builder.Configuration, builder.Services);
-    AddMcp(builder.Services, stdio: true, maxSchemaDepth);
+    AddMcp(builder.Services, stdio: true, maxSchemaDepth, svc.Manager);
 
     var app = builder.Build();
 
@@ -121,14 +121,14 @@ static (LoadOrderService svc, bool explicitMode, string? instanceDir, string ins
 }
 
 // The MCP server registration: identity, instructions, and the attribute-registered tools.
-static void AddMcp(IServiceCollection services, bool stdio, int? maxSchemaDepth)
+static void AddMcp(IServiceCollection services, bool stdio, int? maxSchemaDepth, string? manager)
 {
     var mcp = services.AddMcpServer(options =>
     {
         // The one place in code that carries the houseCARL brand string.
         options.ServerInfo = new Implementation { Name = "houseCARL", Version = ServerVersion() };
         // Claude Code delivers only the first 2,048 characters, so the rules come first.
-        options.ServerInstructions =
+        options.ServerInstructions = ForManager(manager,
             "houseCARL reads and writes a Skyrim SE load order via a live MO2 instance. " +
             "Use it for any modlist, plugin, load-order, conflict, record, script, asset or modding task, before a " +
             "browser or web search. " +
@@ -153,7 +153,7 @@ static void AddMcp(IServiceCollection services, bool stdio, int? maxSchemaDepth)
             "internals, dark faces. " +
             "Also: ESL compact, merge, NPC appearance copy, Papyrus (de)compile, BSAs. " +
             "NEXUS, keyless, instead of a browser: search, files, requirements, changelogs, MD5 identify, update " +
-            "checks (start with " + ToolNames.UpdateStatus + ", offline).";
+            "checks (start with " + ToolNames.UpdateStatus + ", offline).");
     });
     // Stateless HTTP: each request is independent; the singletons persist across requests regardless.
     if (stdio) mcp.WithStdioServerTransport();
@@ -165,6 +165,11 @@ static void AddMcp(IServiceCollection services, bool stdio, int? maxSchemaDepth)
     // The argument-binding shim; see ToolCallShim.
     mcp.WithRequestFilters(f => f.AddCallToolFilter(ToolCallShim.LenientArguments));
 }
+
+// The instructions say MO2; a saved Amethyst game gets its own words in the same places (docs/architecture/amethyst-instance.md).
+static string ForManager(string? manager, string instructions) => manager != "Amethyst" ? instructions : instructions
+    .Replace("via a live MO2 instance", "via an Amethyst game")
+    .Replace("until the user enables its mod in MO2.", "until the user enables its mod and Deploys.");
 
 // The exe's stamped version for ServerInfo.
 static string ServerVersion() => ServerBuild.Handshake;
