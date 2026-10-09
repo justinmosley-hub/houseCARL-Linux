@@ -16,6 +16,11 @@ public static class GamePath
     /// <summary>The last segment without its extension: <c>cuirass</c>.</summary>
     public static string FileNameWithoutExtension(string relPath) => Path.GetFileNameWithoutExtension(FileName(relPath));
 
+    /// <summary>Does the path start with a drive letter (<c>C:</c>)? A game path never does, on any OS —
+    /// <see cref="Path.IsPathRooted(string)"/> only knows drive letters on Windows.</summary>
+    public static bool HasDriveLetter(string path) =>
+        path.Length >= 2 && path[1] == ':' && char.IsAsciiLetter(path[0]);
+
     /// <summary>Everything before the last segment, separators as given: <c>meshes\armor</c>; empty at the top.</summary>
     public static string DirectoryName(string relPath)
     {

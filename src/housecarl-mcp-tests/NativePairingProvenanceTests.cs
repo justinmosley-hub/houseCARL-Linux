@@ -131,17 +131,18 @@ public sealed class NativePairingProvenanceTests
     }
 
     static string? Layer(string archivePath) =>
-        PluginPaths.LayerOfInstallPath(archivePath, new Mo2Roots(ProfileDir: "", DataDir: @"D:\g\Data", ModsDir: @"E:\mo2\mods", OverwriteDir: @"E:\mo2\overwrite"));
+        PluginPaths.LayerOfInstallPath(archivePath, new Mo2Roots(ProfileDir: "", DataDir: HarnessPaths.Rooted(@"D:\g\Data"),
+                                                       ModsDir: HarnessPaths.Rooted(@"E:\mo2\mods"), OverwriteDir: HarnessPaths.Rooted(@"E:\mo2\overwrite")));
 
     [Fact] // probe: "archive under mods\<mod>\ → that mod"
-    public void AnArchiveUnderAModFolderIsThatMod() => Assert.Equal("moreHUD SE", Layer(@"E:\mo2\mods\moreHUD SE\AHZmoreHUD.bsa"));
+    public void AnArchiveUnderAModFolderIsThatMod() => Assert.Equal("moreHUD SE", Layer(HarnessPaths.Rooted(@"E:\mo2\mods\moreHUD SE\AHZmoreHUD.bsa")));
 
     [Fact] // probe: "archive in the overwrite layer → 'overwrite'"
-    public void AnArchiveInOverwriteIsOverwrite() => Assert.Equal("overwrite", Layer(@"E:\mo2\overwrite\X.bsa"));
+    public void AnArchiveInOverwriteIsOverwrite() => Assert.Equal("overwrite", Layer(HarnessPaths.Rooted(@"E:\mo2\overwrite\X.bsa")));
 
     [Fact] // probe: "archive in game Data → 'Data'"
-    public void AnArchiveInGameDataIsData() => Assert.Equal("Data", Layer(@"D:\g\Data\Skyrim - Misc.bsa"));
+    public void AnArchiveInGameDataIsData() => Assert.Equal("Data", Layer(HarnessPaths.Rooted(@"D:\g\Data\Skyrim - Misc.bsa")));
 
     [Fact] // probe: "archive nowhere under the roots → null (no translation)"
-    public void AnArchiveOutsideEveryRootHasNoLayer() => Assert.Null(Layer(@"C:\elsewhere\X.bsa"));
+    public void AnArchiveOutsideEveryRootHasNoLayer() => Assert.Null(Layer(HarnessPaths.Rooted(@"C:\elsewhere\X.bsa")));
 }

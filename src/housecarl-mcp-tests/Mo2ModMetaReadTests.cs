@@ -154,4 +154,23 @@ public sealed class Mo2ModMetaReadTests : IDisposable
     // D: missing file -> null, no throw
     [Fact]
     public void AMissingFileReadsAsNull() => Assert.Null(Mo2ModMeta.Read(Path.Combine(_dir, "does-not-exist.ini")));
+
+    // The mod folder holding a loose file, found from a game path written with '\' against a disk path in this OS's
+    // separators and the casing the mod shipped (docs/architecture/linux-paths.md).
+    [Fact]
+    public void TheModRootOfALooseFileIsFoundAcrossSeparatorsAndCasing()
+    {
+        var mod = Path.Combine(_dir, "mods", "Some Mod");
+        var onDisk = Path.Combine(mod, "skse", "plugins", "Foo.dll");
+
+        Assert.Equal(mod, Mo2ModMeta.ModRootForLooseFile(onDisk, @"SKSE\Plugins\Foo.dll"));
+    }
+
+    [Fact]
+    public void ALooseFileWhosePathDoesNotEndInTheGamePathHasNoModRoot()
+    {
+        var onDisk = Path.Combine(_dir, "mods", "Some Mod", "skse", "Bar.dll");
+
+        Assert.Null(Mo2ModMeta.ModRootForLooseFile(onDisk, @"SKSE\Plugins\Bar.dll"));
+    }
 }

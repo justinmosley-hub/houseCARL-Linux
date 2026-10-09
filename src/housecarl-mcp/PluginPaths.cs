@@ -43,7 +43,7 @@ internal static class PluginPaths
         {
             remainder = "";
             if (root.Length == 0) return false;
-            var r = Norm(root).TrimEnd('\\', '/') + "\\";
+            var r = Path.TrimEndingDirectorySeparator(Norm(root)) + Path.DirectorySeparatorChar;
             if (!path.StartsWith(r, StringComparison.OrdinalIgnoreCase)) return false;
             remainder = path.Substring(r.Length);
             return true;

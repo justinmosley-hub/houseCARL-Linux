@@ -806,7 +806,7 @@ public sealed class AssetResolver : IDisposable
     static string NormalizeQueryPath(string relPath)
     {
         var rel = Normalize(relPath);
-        if (Path.IsPathRooted(rel))
+        if (GamePath.HasDriveLetter(rel) || Path.IsPathRooted(rel))
             throw new ArgumentException($"expected a Data-relative asset path, got a drive-rooted path: '{relPath}'");
         var kept = new List<string>();
         foreach (var seg in rel.Split('\\'))

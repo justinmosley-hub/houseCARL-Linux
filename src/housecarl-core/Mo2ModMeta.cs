@@ -30,11 +30,17 @@ public static class Mo2ModMeta
     /// <summary>The folder MO2 would keep a loose file's meta.ini in — the file's path with its Data-relative tail removed; null when the path does not end in that tail or what is left is a bare drive.</summary>
     public static string? ModRootForLooseFile(string looseFilePath, string dataRelativePath)
     {
-        var tail = dataRelativePath.Replace('/', Path.DirectorySeparatorChar);
-        var full = looseFilePath.Replace('/', Path.DirectorySeparatorChar);
-        if (!full.EndsWith(tail, StringComparison.OrdinalIgnoreCase)) return null;
-        var root = full[..(full.Length - tail.Length)].TrimEnd(Path.DirectorySeparatorChar);
-        return root.Length == 0 || root.EndsWith(':') ? null : root;
+        // Segment by segment: the game path keeps '\' and the disk path uses this OS's separator and casing.
+        var tail = dataRelativePath.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries);
+        var root = looseFilePath;
+        for (int i = tail.Length - 1; i >= 0; i--)
+        {
+            if (!string.Equals(Path.GetFileName(root), tail[i], StringComparison.OrdinalIgnoreCase)) return null;
+            root = Path.GetDirectoryName(root);
+            if (root is null) return null;
+        }
+        root = Path.TrimEndingDirectorySeparator(root);
+        return tail.Length == 0 || root.Length == 0 || root.EndsWith(':') || Path.GetPathRoot(root) == root ? null : root;
     }
 
     /// <summary>The <c>N\fileid</c> values from the <c>[installedFiles]</c> section, in index order; scoped to the section, tolerant of key ordering, and empty rather than null.</summary>
