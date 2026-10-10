@@ -51,6 +51,11 @@ result artifact file. These are the contracts those three share, cited from the 
 An auto-spill claims its path by CREATING the file with `FileMode.CreateNew`, not by probing `File.Exists`, and the
 artifact is written through that same exclusive handle.
 
+Off Windows the create and the lock are two steps: .NET creates the file, then takes an advisory lock on it. A
+reader that opens the new file in between (an indexer, or the test's scanner) wins the lock and the open fails as
+"in use" (`FileInUse`) though the file is this call's own; the reservation deletes it and takes the next counter, so
+the results folder never keeps an empty twin of a spill.
+
 A caller-named target carries the opposite hazard — it is the CALLER's file and may already hold an artifact they
 want — so it is written through a same-directory temp moved into place. A crash mid-write cannot pass a half
 artifact off as a whole one: the manifest is line 1 and carries `row_count`, so a short file fails its own manifest.

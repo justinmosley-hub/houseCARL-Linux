@@ -23,7 +23,12 @@ static class ResultsStore
                 var held = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
                 return ArtifactTarget.Reserved(path, held);   // reserved: this call owns the name and the handle
             }
-            catch (IOException) when (File.Exists(path)) { /* taken — try the next counter */ }
+            catch (IOException ex) when (File.Exists(path))
+            {
+                // Taken: try the next counter. Off Windows CreateNew makes the file, THEN locks it, so a reader that
+                // opened it in between leaves "in use" and a file this call made, not another's: delete it.
+                if (!OperatingSystem.IsWindows() && FileInUse.Is(ex)) try { File.Delete(path); } catch (Exception) { }
+            }
             catch (Exception) { return ArtifactTarget.Named(path); }   // bad dir, permissions — Save names it loud
         }
     }
