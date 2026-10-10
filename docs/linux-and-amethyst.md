@@ -149,9 +149,13 @@ desktop app's config); and the zip is `release/houseCARL-<ver>-linux-x64.zip`. T
 builder's own home folder. The script's paths are written with `/`, which Windows PowerShell reads too, so the
 Windows build is unchanged. The zip keeps the server's executable mark (checked by unzipping it).
 
-**CI** runs a Linux job (`ubuntu-latest`) beside upstream's Windows one in `.github/workflows/ci.yml`: the build, the
-suite with the same zero-tests guard, then the Linux package built and validated, and a check that the server is still
-executable after unzipping. The runner has no Wine, Steam or Creation Kit, so the tests that need them skip.
+**CI** (`.github/workflows/ci.yml`) runs one Linux job (`ubuntu-latest`), `build + probes (Linux)`: the build, the
+suite with upstream's zero-tests guard, then the Linux package built, its tracked notices checked, the package validated
+with `claude plugin validate --strict`, a check that the server is still executable after unzipping, and the zip kept
+as the run's `linux-package` artifact for two weeks. The runner has no Wine, Steam or Creation Kit, so the tests that
+need them skip. The fork does not run upstream's Windows job: the Windows package is upstream's, built by upstream's
+CI, and the fork's merges of upstream bring its Windows results along. `amethyst-linux` requires the Linux job to
+pass before a pull request merges.
 
 A test that cannot run on one OS is marked so it reports as **skipped**, never as passed: `[WindowsFact("what Linux
 lacks")]` for Windows-only behaviour, `[CaseSensitiveDiskFact]` for one that needs a case-sensitive disk. Never `return`
@@ -182,9 +186,8 @@ Upstream merges several pull requests a day, so the fork takes them daily, in sm
 2. A clean merge is pushed, gets a pull request into `amethyst-linux` with auto-merge on, and has CI started on it
    (a pull request made with the workflow's own token does not start CI by itself; a dispatch does, and its results
    attach to the commit the pull request shows).
-3. `amethyst-linux` requires both CI jobs (`build + probes`, Windows, and `build + probes (Linux)`) and an up-to-date
-   branch before a pull request merges, so the sync merges itself only once both pass. A red run leaves the pull
-   request open for a look.
+3. `amethyst-linux` requires the CI job (`build + probes (Linux)`) and an up-to-date branch before a pull request
+   merges, so the sync merges itself only once it passes. A red run leaves the pull request open for a look.
 4. A merge that conflicts pushes nothing and opens (or comments on) an issue titled "Upstream sync conflicts" naming
    the files. Merge by hand keeping both sides: upstream's change and the fork's reason for its own (the "What
    changed, and where" table above says where each fork change lives and why).
@@ -203,8 +206,25 @@ Wine), `ManagerWordingTests` (an upstream rewording of an MO2 remedy the Amethys
   with auto-merge off, neither workflow touches its branch; the daily sync only notes that upstream moved on.
 - Claude may only edit files and run `dotnet`, `git` and read-only `gh run view` / `gh pr view`; it is told never to
   delete, skip or weaken a test and never to change MO2 behaviour, and to commit nothing when unsure.
-- It runs Claude with the repository's write token over code merged from upstream, so it is for a trusted upstream
-  and a repository whose writers are all trusted.
+- Claude reads code merged from upstream, so anything in that code is input to it. It therefore runs in a job whose
+  token can only read the repository: it commits locally, and a second job with no Claude in it pushes those commits
+  to `sync/upstream` only, and only if the branch has not moved meanwhile. The action is pinned to a commit. A fix
+  still reaches `amethyst-linux` only through a person's review.
+
+## Releasing
+
+Upstream tags its Windows releases `v<ver>`, and the fork takes those tags with its merges, so the fork's own tags carry
+a suffix: `v<ver>-linux`, with `.2`, `.3` for another cut of the same version. `<ver>` is the version in
+`plugin/.claude-plugin/plugin.json`, the one the zip is named and the server is stamped with; the release workflow
+refuses a tag that says otherwise.
+
+```
+git tag v2.0.4-linux amethyst-linux
+git push origin v2.0.4-linux
+```
+
+`.github/workflows/release.yml` then runs CI on the tagged commit and, once it is green, publishes
+`houseCARL-<ver>-linux-x64.zip` from that run as a GitHub Release under the tag. A red run publishes nothing.
 
 ## When a Linux user reports…
 
