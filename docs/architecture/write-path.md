@@ -167,8 +167,12 @@ through, and the home of the `PatchEdit` / `CreateSpec` / `ForwardSpec` shapes t
   list held before the write apart from a repeat within the batch.
 - A flags-enum `Add` / `Remove` is a bit operation on the leaf's current value, so one flag flips without the caller
   re-listing the others; a VALUELESS `Remove` is the whole-field clear instead.
-- `Remove` on a required FormLink fails loud rather than writing an empty link; on a nullable one it clears to the
-  empty link, identically to a null-synonym `Set`.
+- `Remove` on a required FormLink fails loud rather than writing an empty link. On a nullable one it leaves the link
+  unset, so the subrecord is not written; a null-synonym `Set` (`"0"`) is the other shape, the subrecord present
+  with FormID zero. The two differ in game (an INFO's PNAM: absent puts the line last, present zero pins it first),
+  so they are never conflated (#1144). The same unset link fills a nullable gendered half a compose leaves out, and
+  `CopyFrom` carries the source link's nullable key, so an absent one copies as absent. One helper,
+  `FormLinkShape`, judges nullable against required and builds, sets and clears a link for every lane.
 - A condition `FormLinkOrIndex` is set through the parent-aware branch, which infers form-versus-index from the
   value and sets the owning arm's discriminator to match.
 - The gendered `[0]` / `[1]` alias maps to the pair's named arms through the same materialize-and-write-back the
@@ -325,8 +329,10 @@ through, and the home of the `PatchEdit` / `CreateSpec` / `ForwardSpec` shapes t
   caller never named is unreachable from it. A target inside the bound universe is refused, and a target in a NESTED
   group is a typed refusal naming the shape rather than a throw rendered as an internal fault.
 - An unset or empty source seed CLEARS the target's value rather than leaving it, and the clear is reported as a
-  clear rather than as a no-op or a zero count. A seed's shape is classified once, by the walk's own classifier, so
-  the attach and clone lanes cannot disagree about a field.
+  clear rather than as a no-op or a zero count. A single link that is PRESENT with FormID zero is not unset: it is
+  copied as a present zero, nullable or required, and reported as one; a zero entry in a link list keeps its index
+  (#1144). A seed's shape is classified once, by the walk's own classifier, so the attach and clone lanes cannot
+  disagree about a field.
 - The off-order link check is per lane: the attach lane asks UP FRONT, nothing stripping there, while the clone lane
   asks the ARTIFACT after the strip, and the refusal splits by cause so the remedy names something the caller did —
   their own `stop`, a record a previous call left in the patch, or an unseeded field carried across.
@@ -439,6 +445,9 @@ through, and the home of the `PatchEdit` / `CreateSpec` / `ForwardSpec` shapes t
   unlisted one, gate and apply keyed off the same test.
 - `FormLinkRemoveTests` — `Remove` clears a nullable FormLink instead of throwing, and fails loud on a required
   one when pre-flight is bypassed.
+- `NullableLinkRemoveTests` — on a written file, a `Remove`d nullable link has no subrecord and a `Set "0"` one has
+  a zero subrecord, the apply echo reads each back, `info_order` places them last and first, and a copy keeps the
+  source's shape, through `CopyFrom` and through the `copy target=` seed lane, single links and link lists alike.
 - `SubclassRemoveTests` — `RemovalTypeFor` routes the typed remove through the flat group's `T`, so a record whose
   concrete class is a subclass of it is really removed rather than silently skipped.
 - `UpsertCreateTests` (RERUN / OVERRIDE / CROSS-TYPE / DUP) — the replace at a stable FormKey, every replace surfaced

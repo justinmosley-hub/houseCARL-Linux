@@ -79,8 +79,10 @@ public sealed class ContainmentIndex
     }
 
     /// <summary>The <c>*parent</c> hop a field read takes: this build's containment map, then the containing record's winner body through the caller's own session.</summary>
+    /// <param name="held">A child's containing record from the caller's bulk gather; null fetches it alone.</param>
     public static Func<IMajorRecordGetter, (IMajorRecordGetter? Parent, string? Why)> ReadHop(
-        LoadOrderResolver.IndexView view, LoadOrderResolver.OverlaySession session) => child =>
+        LoadOrderResolver.IndexView view, LoadOrderResolver.OverlaySession session,
+        Func<IMajorRecordGetter, FormKey, IMajorRecordGetter?>? held = null) => child =>
     {
         var pk = view.ParentOf(child.FormKey);
         if (pk is null)
@@ -89,17 +91,64 @@ public sealed class ContainmentIndex
         var winner = view.ResolveWinner(pk.Value);
         if (winner is null)
             return (null, $"the containing record {FormIdToken.Of(pk.Value)} is not in the active load order");
-        var body = view.GetRecord(session, winner.Value.WinnerPlugin, pk.Value);
+        var body = held?.Invoke(child, pk.Value) ?? FetchContainer(view, session, winner.Value.WinnerPlugin, pk.Value, child.GetType());
         return body is null
             ? (null, $"the containing record {FormIdToken.Of(pk.Value)} would not fetch from its winner '{winner.Value.WinnerPlugin}'")
             : (body, null);
     };
 
-    /// <summary>The child-bearing property surface, spelled <c>Type.Property</c>, derived from <see cref="WriteEngine.ChildBearingProperties"/> over every concrete record type Mutagen models.</summary>
-    public static string ChildBearingSurface() => _surface ??= string.Join(", ",
+    /// <summary>One containing record's body, sought only in the groups a record of <paramref name="childType"/> can sit under (#1147).</summary>
+    static IMajorRecordGetter? FetchContainer(LoadOrderResolver.IndexView view, LoadOrderResolver.OverlaySession session,
+                                              string plugin, FormKey parent, Type childType)
+        => view.GetRecord(session, plugin, parent, ContainerGetter(childType));
+
+    /// <summary>The one getter type a <paramref name="childType"/> record's containing record can have; null when it can be more than one, or none.</summary>
+    public static Type? ContainerGetter(Type childType) => ContainerGetters(childType, 1) is { Count: 1 } t ? t[0] : null;
+
+    /// <summary>The winner bodies of <paramref name="parents"/>, one walk per winner plugin typed by the children; one whose winner would not open is absent.</summary>
+    public static Dictionary<FormKey, IMajorRecordGetter> GatherContainers(
+        LoadOrderResolver.IndexView view, LoadOrderResolver.OverlaySession session,
+        IEnumerable<(FormKey Parent, Type ChildType, int Hops)> parents,
+        out Dictionary<string, PluginUnreadableException> unreadable, CancellationToken ct = default)
+    {
+        var keys = new HashSet<FormKey>();
+        var types = new List<Type>();
+        foreach (var (pk, childType, hops) in parents)
+        {
+            keys.Add(pk);
+            foreach (var t in ContainerGetters(childType, hops))
+                if (!types.Contains(t)) types.Add(t);
+        }
+        return WinnerBodies.For(view, session, keys, types.Count > 0 ? types : null, out unreadable, ct);
+    }
+
+    /// <summary>The getter types that can contain a <paramref name="child"/> record <paramref name="hops"/> steps up; empty when none can.</summary>
+    public static IReadOnlyList<Type> ContainerGetters(Type child, int hops) =>
+        _containerGetters.GetOrAdd((child, hops), static k =>
+        {
+            var concrete = WriteEngine.PrimaryGetter(k.Child) is { } g ? WriteEngine.ConcreteOf(g) : null;
+            IEnumerable<Type> at = concrete is null ? Array.Empty<Type>() : new[] { concrete };
+            for (int i = 0; i < k.Hops; i++) at = at.SelectMany(ContainersOf).Distinct().ToList();
+            return at.Select(WriteEngine.PrimaryGetter).OfType<Type>().Distinct().ToList();
+        });
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<(Type Child, int Hops), IReadOnlyList<Type>> _containerGetters = new();
+
+    /// <summary>The concrete record classes with a child-bearing property that reaches <paramref name="concreteChild"/>.</summary>
+    static IEnumerable<Type> ContainersOf(Type concreteChild) =>
+        ConcreteRecordClasses().Where(t => WriteEngine.ChildBearingProperties(t)
+            .Any(p => WriteEngine.ReachesRecordType(p.PropertyType, concreteChild, new HashSet<Type>(), 0)));
+
+    /// <summary>Every concrete record class Mutagen models for Skyrim.</summary>
+    static IReadOnlyList<Type> ConcreteRecordClasses() => _concrete ??=
         typeof(Weapon).Assembly.GetTypes()
             .Where(t => t.IsClass && !t.IsAbstract && !t.Name.EndsWith("BinaryOverlay", StringComparison.Ordinal)
                         && typeof(IMajorRecord).IsAssignableFrom(t))
+            .ToList();
+    static IReadOnlyList<Type>? _concrete;
+
+    /// <summary>The child-bearing property surface, spelled <c>Type.Property</c>, derived from <see cref="WriteEngine.ChildBearingProperties"/> over every concrete record type Mutagen models.</summary>
+    public static string ChildBearingSurface() => _surface ??= string.Join(", ",
+        ConcreteRecordClasses()
             .SelectMany(t => WriteEngine.ChildBearingProperties(t).Select(p => $"{t.Name}.{p.Name}"))
             .OrderBy(s => s, StringComparer.Ordinal));
     static string? _surface;

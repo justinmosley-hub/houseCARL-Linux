@@ -1,5 +1,5 @@
 ---
-updated: 2026-09-25
+updated: 2026-10-09
 covers: [src/housecarl-core/DialogueInfoOrder.cs, src/housecarl-core/DialogueFold.cs, src/housecarl-core/DialogueSubtype.cs, src/housecarl-mcp/DialogueTools.cs]
 ---
 # Dialogue: the merged INFO order, the fold, and the SNAM marker
@@ -50,6 +50,15 @@ A view's negative claims are gated: `Complete` (every touching plugin's list rea
 `BaselineTrusted` gates every origin-derived claim including "added by a later plugin", and `MovesComputed` gates
 reading an empty `Moved` as "nothing moved".
 
+The one-plugin case is not special-cased in the merge: the definer's own lines go through `Place`, so its PNAM
+links apply within it and `Moved` is measured against its file order. `Solo` (one contributing list, `Complete`) is
+the one-plugin test every render arm reads. A solo topic with an empty `Moved` gets the one-line answer: "IS that
+plugin's own list" when `MovesComputed`, and otherwise (only past the move-analysis ceiling) that its PNAM order was
+not compared, with no over-ceiling clause in the note, since "the order above is exact" would claim the PNAM order.
+A solo topic with moved lines is listed under a header naming the plugin, with a lead saying the shift is its own
+PNAM and that whether the engine follows PNAM or file order within one plugin is untested (#1148). The json row
+always carried the order and the marks.
+
 ### The fold
 
 `DialogueFold` projects ONE off-order plugin into a dialogue read as if it were enabled. Where it lands is read off
@@ -79,7 +88,9 @@ plain filename and is the value written as data — a `.seq` lint compares it, a
 artifact holds a column. Provenance rides beside the name, never inside it.
 
 The fold never sets the move baseline unless it DEFINES the topic: a master-block fold can land ahead of the definer,
-which would render the definer's own lines as "added by a later plugin" and half the topic as MOVED.
+which would render the definer's own lines as "added by a later plugin" and half the topic as MOVED. The exception
+is a fold that is the only list with lines (the definer lists none): it lands ahead of nothing, so its own file order
+is the baseline and the topic reads as solo.
 
 ### The SNAM subtype marker
 
@@ -106,6 +117,9 @@ off the countless vanilla topics whose number is legitimately noisy.
 ## Pinned by
 - `InfoOrderMergeTests`, `InfoOrderDegradeTests` and `InfoOrderRenderTests` — the merged INFO order, by the arms
   named beside its sentences above.
+- `InfoOrderSoloPnamTests` — a one-plugin topic whose PNAM disagrees with its file order is listed in `Place`'s
+  order with the moved line marked under a header naming the plugin, and one whose PNAM chain agrees keeps the
+  one-line answer, folded or not; `InfoOrderRenderTests` pins the solo topic past the move-analysis ceiling.
 - `DialogueFamilyTests.FactD1_TheShippedRenderStatesTheMergeModel` — the `info_order` render states the merge
   model and never says a line is dropped; `FactD3_UnreadWired` — a touching plugin that could not be read makes
   the view INCOMPLETE and is named.

@@ -258,6 +258,18 @@ internal static class CheckSentences
         "unverifiable notes: {0} further record(s) carry a note already reported for the same script class — " +
         "collapsed, so the listing is not a wall of one sentence. The unverifiable total above counts them all.";
 
+    /// <summary>The <c>to_file=</c> twin: the collapsed repeats have no row, and the file's total counts them.</summary>
+    [MustState("no row", "total")]
+    internal const string ArtifactUnverifiableCollapsed =
+        "{0} unverifiable note(s) repeat a script class and reason already written for another record, so they have " +
+        "no row of their own; the file's total counts them.";
+
+    /// <summary>The <c>to_file=</c> seed cut: the untried seeds have no rows and no place in the total, so the file is incomplete.</summary>
+    [MustState("limit=", "no row", "incomplete")]
+    internal const string ArtifactDialogueSeedsCut =
+        "{0} of the {1} seed(s) named were never tried (limit={2}), so their findings have no row and are not in the " +
+        "file's total; the file is incomplete.";
+
     [NoClaims("a label; the claim it introduces is the named family's own boundary")]
     internal const string SweepBoundaryLabelFor = "boundary ({0}): ";
 

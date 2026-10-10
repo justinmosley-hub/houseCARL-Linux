@@ -66,11 +66,17 @@ public static class ReadEngine
 
     /// <summary>A FormLink carrying no target: a NON-nullable link holding FormID zero, or a NULLABLE link whose
     /// subrecord is ABSENT. Not round-trippable, so a note the conflict diff reads as "no value here".</summary>
-    internal const string NullLinkNote = "(null link)";
+    internal const string NullLinkNote = "(" + NullLinkText + ")";
+
+    /// <summary>The bare text of <see cref="NullLinkNote"/>, for a reply that is not a read.</summary>
+    internal const string NullLinkText = "null link";
 
     /// <summary>A NULLABLE FormLink whose subrecord is PRESENT and carries FormID zero — an INFO's PNAM "I am
     /// first" marker, told apart from an ABSENT nullable link by <c>FormKeyNullable</c>.</summary>
-    internal const string PresentNullLinkNote = "(null link, subrecord present)";
+    internal const string PresentNullLinkNote = "(" + PresentNullLinkText + ")";
+
+    /// <summary>The bare text of <see cref="PresentNullLinkNote"/>, for a reply that is not a read.</summary>
+    internal const string PresentNullLinkText = "null link, subrecord present";
 
     /// <summary>A present <c>TranslatedString</c> whose <c>.String</c> resolves to null.</summary>
     internal const string UnresolvedStringNote = "(unresolved localized string)";
@@ -120,12 +126,13 @@ public static class ReadEngine
 
     /// <summary>Read a located record's fields as round-trippable tokens — the structured entry the MCP server
     /// consumes, per-leaf fault isolated.</summary>
-    /// <param name="depths">One depth per entry of <paramref name="paths"/> when they must differ; every path
-    /// spends the same expansion budget.</param>
+    /// <param name="depths">One depth per entry of <paramref name="paths"/> when they must differ, with the sub-path
+    /// read off each element when that entry is a list read for one field only; every path spends the same
+    /// expansion budget.</param>
     public static RecordFields ReadFields(IMajorRecordGetter record, IReadOnlyList<string>? paths = null, int depth = 1,
                                           string? containerHint = DepthExpandHint,
                                           Func<IMajorRecordGetter, (IMajorRecordGetter? Parent, string? Why)>? parentOf = null,
-                                          IReadOnlyList<int>? depths = null)
+                                          IReadOnlyList<(int Depth, string[]? Tail)>? depths = null)
     {
         var typeName = RecordNaming.StripGetterInterface(WriteEngine.PrimaryGetter(record.GetType())?.Name ?? "I?Getter");
         var targets = paths is { Count: > 0 } ? (IEnumerable<string>)paths : ModeledFieldNames(typeName, record.GetType());
@@ -160,13 +167,14 @@ public static class ReadEngine
             int at = 0;
             foreach (var p in targets)
             {
-                int d = perPath is not null ? perPath[at] : depth;
+                var (d, elementTail) = perPath is not null ? perPath[at] : (depth, null);
                 at++;
                 var seg = p.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 var (on, tail, hopNote) = HopToParent(record, seg, parentOf);
                 if (hopNote is not null) { fields.Add(new FieldValue(p, false, null, hopNote, null, Present: false, Count: null, Readable: false)); continue; }
                 int from = fields.Count;
-                EmitWithDepth(on, string.Join(".", tail), d, fields, ref budget, p);
+                EmitWithDepth(on, string.Join(".", tail), d, fields, ref budget, p,
+                              elementTail is { Length: > 0 } ? new ElementTail(elementTail) : null);
                 // Same rule as the depth-1 branch, over the lines THIS path emitted, on the record the walk ran on.
                 AnnotateOpaqueBytes(fields, from, on.FormVersion);
             }
@@ -476,7 +484,8 @@ public static class ReadEngine
 
     /// <summary>Emit one target path, expanding contents up to <paramref name="depth"/> levels under the same
     /// per-field fault isolation depth-1 gives. <paramref name="display"/> is how the rows spell the path.</summary>
-    static void EmitWithDepth(object record, string path, int depth, List<FieldValue> sink, ref int budget, string? display = null)
+    static void EmitWithDepth(object record, string path, int depth, List<FieldValue> sink, ref int budget, string? display = null,
+                              ElementTail? tail = null)
     {
         var shown = display ?? path;
         try
@@ -484,9 +493,41 @@ public static class ReadEngine
             var seg = path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             var nav = NavigateValue(record, seg);
             if (!nav.ok) { Emit(sink, ref budget, new FieldValue(shown, false, null, nav.note, Present: false, Readable: nav.readable)); return; }
-            Expand(nav.val, nav.type, nav.parent, shown, depth, sink, ref budget);
+            Expand(nav.val, nav.type, nav.parent, shown, depth, sink, ref budget, tail);
+            // A sub-path no element has is a wrong path, not an absence: its note is said once, on the first element.
+            if (tail is { Resolved: false, Miss: { } miss }) Emit(sink, ref budget, miss);
         }
         catch (Exception ex) { Emit(sink, ref budget, Fault(shown, ex)); }
+    }
+
+    /// <summary>The sub-path a <c>List[*].Sub</c> read takes from each element, so the budget counts those
+    /// lines alone; the list's own line is read as ever.</summary>
+    sealed class ElementTail(string[] segs)
+    {
+        internal string[] Segs { get; } = segs;
+        internal string Text { get; } = string.Join(".", segs);
+        internal bool Resolved;
+        internal FieldValue? Miss;
+    }
+
+    /// <summary>One list element: the whole element, or under a <see cref="ElementTail"/> just its sub-path, read
+    /// at depth 1 because the column renders that one line.</summary>
+    static void ExpandElement(object? item, Type declaredType, object parent, string elemPath, int depth, ElementTail? tail,
+                              List<FieldValue> sink, ref int budget)
+    {
+        if (tail is null) { ExpandChild(item, declaredType, parent, elemPath, depth, sink, ref budget); return; }
+        // An element without the sub-path carries no line, as the whole-element walk gave none.
+        if (item is null) return;
+        var shown = $"{elemPath}.{tail.Text}";
+        var nav = NavigateValue(item, tail.Segs);
+        if (!nav.ok)
+        {
+            if (nav.noField) tail.Miss ??= new FieldValue(shown, false, null, nav.note, Present: false, Readable: false);
+            else if (!nav.readable) Emit(sink, ref budget, new FieldValue(shown, false, null, nav.note, Present: false, Readable: false));
+            return;
+        }
+        tail.Resolved = true;
+        ExpandChild(nav.val, nav.type, nav.parent, shown, 1, sink, ref budget);
     }
 
     /// <summary>The ONE unreadable line the deep walk emits — the sentence and flags the depth-1 read carries.</summary>
@@ -513,7 +554,8 @@ public static class ReadEngine
 
     /// <summary>Recursively emit <paramref name="val"/>: a value leaf to its token, a link to its note, a
     /// container to a summary and one child line per element. A child that cannot be read is never skipped.</summary>
-    static void Expand(object? val, Type declaredType, object parent, string path, int depth, List<FieldValue> sink, ref int budget)
+    static void Expand(object? val, Type declaredType, object parent, string path, int depth, List<FieldValue> sink, ref int budget,
+                       ElementTail? tail = null)
     {
         if (budget < 0) return;
         var leaf = EmitToken(val, declaredType, parent);
@@ -557,9 +599,10 @@ public static class ReadEngine
                 var et = entry.GetType();
                 var key = et.GetProperty("Key", BindingFlags.Public | BindingFlags.Instance)?.GetValue(entry);
                 var ev = et.GetProperty("Value", BindingFlags.Public | BindingFlags.Instance)?.GetValue(entry);
-                ExpandChild(ev, ev?.GetType() ?? typeof(object), val, $"{path}[{key}]", childDepth, sink, ref budget);
+                ExpandElement(ev, ev?.GetType() ?? typeof(object), val, $"{path}[{key}]", childDepth, tail, sink, ref budget);
             }
         }
+        else if (tail is not null && val is not System.Collections.IEnumerable) return;   // not a list: the fold refuses it off the head line
         else if (WriteEngine.GenderedInterface(val.GetType()) is not null)
         {
             // Gendered pair ([0]=male, [1]=female), via the SAME index-to-arm mapping navigation uses.
@@ -595,10 +638,10 @@ public static class ReadEngine
                     catch (Exception ex)
                     {
                         Emit(sink, ref budget, ElementFault(parent, path, i, ex));
-                        ExpandRestByIndex(val, parent, path, i + 1, childDepth, sink, ref budget);
+                        ExpandRestByIndex(val, parent, path, i + 1, childDepth, sink, ref budget, tail);
                         return;
                     }
-                    ExpandChild(item, item?.GetType() ?? typeof(object), val, $"{path}[{i}]", childDepth, sink, ref budget);
+                    ExpandElement(item, item?.GetType() ?? typeof(object), val, $"{path}[{i}]", childDepth, tail, sink, ref budget);
                     i++;
                 }
             }
@@ -630,7 +673,7 @@ public static class ReadEngine
     /// <summary>Emit the elements from <paramref name="from"/> onward one at a time, each isolated — taken only
     /// after an enumeration already threw.</summary>
     static void ExpandRestByIndex(object val, object parent, string listPath, int from, int childDepth,
-                                  List<FieldValue> sink, ref int budget)
+                                  List<FieldValue> sink, ref int budget, ElementTail? tail = null)
     {
         if (IndexedElements(val) is not { } indexed)
         {
@@ -646,7 +689,7 @@ public static class ReadEngine
             object? item;
             try { item = indexed.At(i); }
             catch (Exception ex) { Emit(sink, ref budget, ElementFault(parent, listPath, i, ex)); continue; }
-            ExpandChild(item, item?.GetType() ?? typeof(object), val, $"{listPath}[{i}]", childDepth, sink, ref budget);
+            ExpandElement(item, item?.GetType() ?? typeof(object), val, $"{listPath}[{i}]", childDepth, tail, sink, ref budget);
         }
     }
 
@@ -711,7 +754,7 @@ public static class ReadEngine
 
     /// <summary>Navigate a path READ-ONLY to its target, yielding the live value object (+ declared type + owning
     /// parent) or a miss note; the same walk as <see cref="ReadLeaf"/>, fault-isolated.</summary>
-    static (bool ok, object? val, Type type, object parent, string? note, bool readable) NavigateValue(object record, string[] path)
+    static (bool ok, object? val, Type type, object parent, string? note, bool readable, bool noField) NavigateValue(object record, string[] path)
     {
         try
         {
@@ -721,24 +764,24 @@ public static class ReadEngine
                 var (segName, segKey) = WriteEngine.ParseSegment(path[i]);
                 var p = WriteEngine.ResolveProperty(current.GetType(), segName);
                 if (p is null) return (false, null, typeof(object), current,
-                    NoFieldNote(current, segName, i > 0 ? WriteEngine.ParseSegment(path[i - 1]).name : null, path[(i + 1)..]), false);
+                    NoFieldNote(current, segName, i > 0 ? WriteEngine.ParseSegment(path[i - 1]).name : null, path[(i + 1)..]), false, true);
                 var next = segKey is null ? p.GetValue(current) : WriteEngine.StepIntoElement(current, p, segName, segKey);
-                if (next is null) return (false, null, typeof(object), record, AbsentNote, true);
+                if (next is null) return (false, null, typeof(object), record, AbsentNote, true, false);
                 current = next;
             }
             var (leafName, leafKey) = WriteEngine.ParseSegment(path[^1]);
             var leaf = WriteEngine.ResolveProperty(current.GetType(), leafName);
             if (leaf is null) return (false, null, typeof(object), current,
-                NoFieldNote(current, leafName, path.Length >= 2 ? WriteEngine.ParseSegment(path[^2]).name : null), false);
+                NoFieldNote(current, leafName, path.Length >= 2 ? WriteEngine.ParseSegment(path[^2]).name : null), false, true);
             if (leafKey is not null)
             {
                 var elem = WriteEngine.StepIntoElement(current, leaf, leafName, leafKey);
-                return (true, elem, elem.GetType(), current, null, true);
+                return (true, elem, elem.GetType(), current, null, true, false);
             }
-            return (true, leaf.GetValue(current), leaf.PropertyType, current, null, true);
+            return (true, leaf.GetValue(current), leaf.PropertyType, current, null, true, false);
         }
-        catch (ExpectedApplyRejectionException ex) { return (false, null, typeof(object), record, AbsentWith(ex), true); }
-        catch (Exception ex) { return (false, null, typeof(object), record, ThrowNote(ex), false); }
+        catch (ExpectedApplyRejectionException ex) { return (false, null, typeof(object), record, AbsentWith(ex), true, false); }
+        catch (Exception ex) { return (false, null, typeof(object), record, ThrowNote(ex), false, ex is PathKeyShapeException); }
     }
 
     /// <summary>Best-effort COMPACT identity of the element a list/dict verb just acted on. NEVER throws.</summary>
@@ -902,7 +945,7 @@ public static class ReadEngine
         {
             if (!fl.FormKey.IsNull) return LeafRead.Value(FormIdToken.Of(fl.FormKey));
             // FormKeyNullable is null only when the subrecord is ABSENT; PRESENT with zero means the opposite.
-            bool nullable = WriteEngine.ClosedInterface(val.GetType(), typeof(IFormLinkNullableGetter<>)) is not null;
+            bool nullable = FormLinkShape.IsNullable(val.GetType());
             return LeafRead.None(nullable && fl.FormKeyNullable is not null ? PresentNullLinkNote : NullLinkNote);
         }
         // TranslatedString — the resolved .String.
