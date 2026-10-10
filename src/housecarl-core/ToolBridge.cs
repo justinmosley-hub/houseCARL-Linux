@@ -34,10 +34,10 @@ public static class ToolBridge
             "BSArch is a standalone tool on Nexus Mods (also bundled with 'Cathedral Assets Optimizer' / 'BSA Browser')"),
         new(ToolDependency.PapyrusLogs, "papyrus_logs", "the Papyrus script-log folder", true, null,
             "reading Papyrus script logs for triage",
-            "they're under Documents\\My Games\\Skyrim Special Edition\\Logs\\Script (set bEnableLogging=1 in the ini if the folder is absent)"),
+            "they're under Documents\\My Games\\Skyrim Special Edition\\Logs\\Script (set bEnableLogging=1 in the ini if the folder is absent)" + ProtonDocuments),
         new(ToolDependency.CrashLogs, "crash_logs", "the SKSE crash-log folder", true, null,
             "reading crash logs for diagnosis",
-            "Crash Logger SSE (Nexus) writes them under Documents\\My Games\\Skyrim Special Edition\\SKSE\\Crashlogs"),
+            "Crash Logger SSE (Nexus) writes them under Documents\\My Games\\Skyrim Special Edition\\SKSE\\Crashlogs" + ProtonDocuments),
     };
 
     static readonly Dictionary<ToolDependency, ToolInfo> ByDep = All.ToDictionary(i => i.Dep);
@@ -106,11 +106,15 @@ public static class ToolBridge
                         yield return Path.Combine(g, "Papyrus Compiler", "PapyrusCompiler.exe");
                 break;
             case ToolDependency.PapyrusLogs:
-                yield return Path.Combine(MyGames, "Logs", "Script");
+                foreach (var myGames in MyGamesFolders(gameDirHints))
+                    yield return Path.Combine(myGames, "Logs", "Script");
                 break;
             case ToolDependency.CrashLogs:
-                yield return Path.Combine(MyGames, "SKSE", "Crashlogs");          // Crash Logger SSE
-                yield return Path.Combine(MyGames, "NetScriptFramework", "Crash"); // .NET Script Framework
+                foreach (var myGames in MyGamesFolders(gameDirHints))
+                {
+                    yield return Path.Combine(myGames, "SKSE", "Crashlogs");          // Crash Logger SSE
+                    yield return Path.Combine(myGames, "NetScriptFramework", "Crash"); // .NET Script Framework
+                }
                 break;
             // Bsarch: user-downloaded, no canonical home — no candidates.
         }
@@ -136,4 +140,30 @@ public static class ToolBridge
 
     static string MyGames => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "My Games", "Skyrim Special Edition");
+
+    /// <summary>The game's My Games folders: the user's own; off Windows, also the one inside each hinted game's Proton
+    /// prefix, which is where the game, run by Proton, writes its logs.</summary>
+    static IEnumerable<string> MyGamesFolders(IReadOnlyList<string>? gameDirHints)
+    {
+        yield return MyGames;
+        if (OperatingSystem.IsWindows()) yield break;
+        foreach (var g in gameDirHints ?? Array.Empty<string>())
+            if (ProtonMyGames(g) is { } proton) yield return proton;
+    }
+
+    /// <summary>A Steam game's My Games folder inside its Proton prefix: Steam keeps the prefix in the game's own library,
+    /// at steamapps/compatdata/&lt;app id&gt;/pfx, and Skyrim SE's app id is 489830. Null for a game folder that is not
+    /// &lt;library&gt;/steamapps/common/&lt;game&gt;.</summary>
+    internal static string? ProtonMyGames(string gameDir)
+    {
+        var common = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(gameDir));
+        var steamapps = common is null ? null : Path.GetDirectoryName(common);
+        if (steamapps is null || !string.Equals(Path.GetFileName(common), "common", StringComparison.OrdinalIgnoreCase)) return null;
+        return Path.Combine(steamapps, "compatdata", "489830", "pfx", "drive_c", "users", "steamuser", "Documents", "My Games",
+                            "Skyrim Special Edition");
+    }
+
+    /// <summary>Where the game's Documents are off Windows, for the where-to-find-it sentences.</summary>
+    const string ProtonDocuments =
+        " (on Linux, under the game's Proton prefix: <Steam library>/steamapps/compatdata/489830/pfx/drive_c/users/steamuser/Documents)";
 }

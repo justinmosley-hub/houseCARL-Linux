@@ -38,7 +38,7 @@ public static class StatusTools
         // The server line goes ahead of the config prompt: an unconfigured server is exactly the stale staged install this line exists to catch.
         if (svc.ConfigPromptOrNull() is { } prompt) return StatusWire.ServerLine + prompt;
         var data = svc.StatusData();
-        var logs = StatusWire.LogFolders(tools);                 // resolved Papyrus/crash log dirs (pure — no persist)
+        var logs = StatusWire.LogFolders(tools, svc.GameDirOrNull() is { } gameDir ? new[] { gameDir } : null);   // resolved Papyrus/crash log dirs (pure — no persist)
         var profiles = svc.NamedProfileComposition(profile);     // available-profile discovery + inactive-profile inspection: text parse only, no index build, no switch
         // Read only for a filter: the facts are a per-plugin locate and header read, and the whole-profile summary asks about none.
         var facts = filter is { Length: > 0 } ? svc.PluginFactsFor(filter.Trim(), data) : null;
@@ -118,12 +118,12 @@ static class StatusWire
     }
 
     /// <summary>Where papyrus_logs and crash_logs resolve — saved, auto-detected, or unset — without persisting, since a read-only status call must mutate nothing.</summary>
-    public static IReadOnlyList<LogFolderView> LogFolders(ToolPathResolver tools)
+    public static IReadOnlyList<LogFolderView> LogFolders(ToolPathResolver tools, IReadOnlyList<string>? gameDirHints = null)
     {
         var views = new List<LogFolderView>(2);
         foreach (var dep in new[] { ToolDependency.PapyrusLogs, ToolDependency.CrashLogs })
         {
-            var (path, source) = tools.Inspect(dep);
+            var (path, source) = tools.Inspect(dep, gameDirHints);   // the game's folder: its Proton prefix holds the logs off Windows
             views.Add(new LogFolderView(ToolBridge.Info(dep).Key, path, source));
         }
         return views;

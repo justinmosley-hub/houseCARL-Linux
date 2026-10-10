@@ -6,7 +6,7 @@ description: >-
   auditing a `_KID.ini`, tagging items by name, archetype, equip-slot or stat filters, or asking
   why a KID line isn't applying; load it before composing any KID line, because a misread token
   silently changes what gets tagged. Keywords onto NPCs are SPID, not KID.
-compatibility: Requires the houseCARL MCP server and a configured Mod Organizer 2 instance.
+compatibility: Requires the houseCARL MCP server and a configured Mod Organizer 2 instance or Amethyst game.
 ---
 
 # KID Authoring

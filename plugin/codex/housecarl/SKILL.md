@@ -10,7 +10,7 @@ description: >-
   plugins — and names the specialist skill that owns each grammar. Not for
   another game, for installing MO2, or for gameplay advice with no data-layer
   step.
-compatibility: Requires the houseCARL MCP server and a configured Mod Organizer 2 instance.
+compatibility: Requires the houseCARL MCP server and a configured Mod Organizer 2 instance or Amethyst game.
 ---
 
 # houseCARL

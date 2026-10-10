@@ -9,7 +9,7 @@ description: >-
   isn't distributing, including a line that names one NPC. Not this skill: a keyword onto item
   records is KID, and a record's own fields are SkyPatcher, which is also usually the better fit for
   one named NPC — a preference, not a boundary.
-compatibility: Requires the houseCARL MCP server and a configured Mod Organizer 2 instance.
+compatibility: Requires the houseCARL MCP server and a configured Mod Organizer 2 instance or Amethyst game.
 ---
 
 # SPID Authoring

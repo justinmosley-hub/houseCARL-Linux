@@ -86,6 +86,26 @@ Getting the compiler: install **Skyrim Special Edition: Creation Kit** from Stea
 `Papyrus Compiler/PapyrusCompiler.exe` and the vanilla script sources (`Data/Scripts.zip`, to extract to
 `Data/Source/Scripts`). Then `housecarl_set_tool_path tool='papyrus_compiler'` with the `.exe`'s path, as on Windows.
 
+### The game's log folders
+
+The game runs under Proton, so its `Documents\My Games\Skyrim Special Edition` is inside its Proton prefix, which Steam
+keeps in the game's own library: `<library>/steamapps/compatdata/489830/pfx/drive_c/users/steamuser/Documents/My Games/
+Skyrim Special Edition` (489830 is Skyrim SE's Steam app id). Off Windows, `ToolBridge` also looks there for the
+Papyrus log and crash-log folders, from the load order's game folder (`ToolBridge.ProtonMyGames`), and the
+where-to-find-it sentences name the prefix; `housecarl_load_order_status` shows them as auto-detected once the game has
+written them. Pinned by `ProtonLogFolderTests`.
+
+### The bundled skills
+
+The skills' requirement line names an Amethyst game beside an MO2 instance, so a session on Amethyst does not pass
+them over. What they still say for Windows or MO2, on purpose:
+- log paths written as `Documents\My Games\…`: the Proton location is the one above, and the status tool shows it;
+- `skse-plugin-authoring`'s toolchain notes build an SKSE plugin with the Windows toolchain and deploy it into an MO2
+  mod; building SKSE plugins on Linux is out of this fork's scope;
+- mentions of MO2 that only name the manager (an OAR `user.json` in its own mod, SPID reading `meta.ini`'s `version=`),
+  which hold for Amethyst mods too;
+- the Codex entry skill (`plugin/codex`) is upstream's, for Codex; this fork targets Claude Code.
+
 ## Windows → Linux, for this codebase
 
 | On Windows | On Linux | What it means here |

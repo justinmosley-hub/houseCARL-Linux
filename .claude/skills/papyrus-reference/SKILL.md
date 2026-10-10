@@ -9,7 +9,7 @@ description: >-
   compiling it. A function the corpus does not carry gets a warning and a check path, never an
   invented signature.
 compatibility: >-
-  Requires the houseCARL MCP server and a configured Mod Organizer 2 instance. The lookup is
+  Requires the houseCARL MCP server and a configured Mod Organizer 2 instance or Amethyst game. The lookup is
   offline; only what reads the live load order needs them.
 ---
 
