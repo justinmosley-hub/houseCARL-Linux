@@ -57,6 +57,7 @@ public class FaceGenWorld : IDisposable
     public bool UnlistedStaged { get; }
 
     readonly string _unlistedDir;
+    bool _unlistedDenied;   // lifted once: a later Release may find the folder already deleted
     Exception? _cleanupFailure;
 
     /// <summary>A plugin the order does not load, whose orphaned facegen folder is one of the inert rows.</summary>
@@ -209,7 +210,7 @@ public class FaceGenWorld : IDisposable
                     File.WriteAllBytes(Path.Combine(bsaDir, bsa), new byte[] { 0xDE, 0xAD, 0xBE, 0xEF });
 
             // Deny listing only, not inherited (as LocalizedModFolderUnreadableTests does), so the bake still resolves by traverse.
-            UnlistedStaged = DenyAce.TryDenyListing(_unlistedDir);
+            UnlistedStaged = _unlistedDenied = DenyAce.TryDenyListing(_unlistedDir);
 
             Svc = LoadOrderService.WithInstance(instance, 0, new UserConfigStore(Path.Combine(Root, "houseCARL.user.json")));
         }
@@ -237,7 +238,11 @@ public class FaceGenWorld : IDisposable
     {
         try
         {
-            if (UnlistedStaged) DenyAce.UndenyListing(_unlistedDir);   // lifting twice is harmless
+            if (_unlistedDenied)
+            {
+                DenyAce.UndenyListing(_unlistedDir);
+                _unlistedDenied = false;
+            }
             if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true);
             _cleanupFailure = null;
         }
