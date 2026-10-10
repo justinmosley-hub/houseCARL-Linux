@@ -1,0 +1,101 @@
+# Upstream sync — the Linux / Amethyst fork's daily merge of Avick3110/houseCARL's main (docs/linux-and-amethyst.md,
+# "Keeping up with upstream").
+# What it does, in plain terms: once a day, merge upstream's new commits into the sync/upstream branch, open a pull
+# request into amethyst-linux, and start CI on it. A clean merge that passes both CI jobs merges itself: auto-merge
+# waits for the checks amethyst-linux requires. A merge that conflicts opens an issue naming the files and stops;
+# nothing reaches amethyst-linux either way until it has passed.
+#
+# Why CI is started here: a pull request or push made with this workflow's own token does not start other workflows
+# (GitHub's guard against loops), but a workflow_dispatch does, and its check results attach to the commit the pull
+# request shows.
+name: Upstream sync
+
+on:
+  schedule:
+    - cron: '17 6 * * *'   # daily, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write        # push the sync branch
+  pull-requests: write   # open and auto-merge its pull request
+  actions: write         # start CI on it
+  issues: write          # report a conflict
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/Avick3110/houseCARL.git
+  BASE: amethyst-linux
+  SYNC: sync/upstream
+
+jobs:
+  sync:
+    name: merge upstream main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the fork's working branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BASE }}
+          fetch-depth: 0
+
+      - name: Merge upstream main into the sync branch
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM"
+          git fetch --no-tags upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "$BASE already has every upstream commit; nothing to do."
+            echo "result=current" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sha=$(git rev-parse --short upstream/main)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "count=$(git rev-list --count HEAD..upstream/main)" >> "$GITHUB_OUTPUT"
+          git switch -C "$SYNC"
+          if git merge --no-ff --no-edit -m "Merge upstream main ($sha) into $BASE" upstream/main; then
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push the sync branch, open its pull request, start CI on it
+        if: steps.merge.outputs.result == 'merged'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.merge.outputs.sha }}
+          COUNT: ${{ steps.merge.outputs.count }}
+        run: |
+          git push --force origin "$SYNC"
+          title="Merge upstream main ($SHA)"
+          body="Brings in $COUNT upstream commit(s) from Avick3110/houseCARL main, up to $SHA. Opened by the Upstream sync workflow; it merges itself once both CI jobs pass. See docs/linux-and-amethyst.md, Keeping up with upstream."
+          pr=$(gh pr list --head "$SYNC" --base "$BASE" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then
+            gh pr create --head "$SYNC" --base "$BASE" --title "$title" --body "$body"
+          else
+            gh pr edit "$pr" --title "$title" --body "$body"
+          fi
+          gh pr merge "$SYNC" --auto --merge --delete-branch
+          gh workflow run CI --ref "$SYNC"
+
+      - name: Report the conflict in an issue
+        if: steps.merge.outputs.result == 'conflict'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.merge.outputs.sha }}
+        run: |
+          files=$(sed 's/^/- `/; s/$/`/' "$RUNNER_TEMP/conflicts.txt")
+          body=$(printf 'Merging upstream main (%s) into %s conflicts in:\n\n%s\n\nNothing was pushed. Merge it by hand (or let the fix step do it), keeping both sides: see docs/linux-and-amethyst.md, Keeping up with upstream.' "$SHA" "$BASE" "$files")
+          issue=$(gh issue list --state open --search "in:title Upstream sync conflicts" --json number --jq '.[0].number // empty')
+          if [ -z "$issue" ]; then
+            gh issue create --title "Upstream sync conflicts" --body "$body"
+          else
+            gh issue comment "$issue" --body "$body"
+          fi
+          exit 1

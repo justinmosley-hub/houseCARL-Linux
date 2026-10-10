@@ -173,6 +173,27 @@ Skipped on Linux, each with its reason: the five Papyrus compile tests (no `Papy
 three that carry a creation time across a replace, a memory-mapped file blocking a replace, the Windows installer's
 held-DLL check, and upstream's own held-file dispose check.
 
+## Keeping up with upstream
+
+Upstream merges several pull requests a day, so the fork takes them daily, in small merges, and never straight into
+`amethyst-linux`. `.github/workflows/upstream-sync.yml` runs at 06:17 UTC (and by hand from the Actions tab):
+
+1. It merges upstream's `main` into a fresh `sync/upstream` branch off `amethyst-linux`. Nothing new: it stops.
+2. A clean merge is pushed, gets a pull request into `amethyst-linux` with auto-merge on, and has CI started on it
+   (a pull request made with the workflow's own token does not start CI by itself; a dispatch does, and its results
+   attach to the commit the pull request shows).
+3. `amethyst-linux` requires both CI jobs (`build + probes`, Windows, and `build + probes (Linux)`) and an up-to-date
+   branch before a pull request merges, so the sync merges itself only once both pass. A red run leaves the pull
+   request open for a look.
+4. A merge that conflicts pushes nothing and opens (or comments on) an issue titled "Upstream sync conflicts" naming
+   the files. Merge by hand keeping both sides: upstream's change and the fork's reason for its own (the "What
+   changed, and where" table above says where each fork change lives and why).
+
+The checks that catch a fork-specific break in a merge that is otherwise clean: the Linux job itself (casing, paths,
+Wine), `ManagerWordingTests` (an upstream rewording of an MO2 remedy the Amethyst table swaps), and the Amethyst tests.
+A later step can have Claude Code fix a red or conflicting sync in the same pull request, for a person to review; it
+is not set up yet.
+
 ## When a Linux user reports…
 
 | Report | First place to look |
