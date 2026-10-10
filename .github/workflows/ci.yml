@@ -9,6 +9,7 @@ on:
   push:
     branches: [main, amethyst-linux]   # amethyst-linux: the Linux / Amethyst fork's working branch
   pull_request:
+  workflow_dispatch:   # a run started by hand (gh workflow run CI, or the Actions tab)
 
 # Cancel a superseded in-progress run on the SAME pull request when a newer commit is pushed
 # (saves runner time and queue contention while iterating on a PR). Never cancel main-branch
