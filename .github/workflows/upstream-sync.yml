@@ -43,6 +43,8 @@ jobs:
 
       - name: Merge upstream main into the sync branch
         id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -51,6 +53,12 @@ jobs:
           if git merge-base --is-ancestor upstream/main HEAD; then
             echo "$BASE already has every upstream commit; nothing to do."
             echo "result=current" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          waiting=$(gh pr list --head "$SYNC" --base "$BASE" --state open --json number,autoMergeRequest --jq '[.[] | select(.autoMergeRequest == null)][0].number // empty')
+          if [ -n "$waiting" ]; then   # auto-merge off: a fix Claude made, or a hold, waiting for a person
+            gh pr comment "$waiting" --body "Upstream main has moved on to $(git rev-parse --short upstream/main). This pull request is waiting for a review, so the sync left it as it is; merge or close it and the next sync takes the rest."
+            echo "result=waiting" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           sha=$(git rev-parse --short upstream/main)

@@ -1,0 +1,220 @@
+# Sync fix — the Linux / Amethyst fork's repair of a daily upstream sync that went wrong (docs/linux-and-amethyst.md,
+# "Keeping up with upstream").
+# What it does, in plain terms: when CI fails on the sync/upstream branch, or the sync's merge conflicts, Claude Code
+# reads what broke, fixes it on that branch following CLAUDE.md and the fork guide, and CI runs again. A fix Claude made
+# never merges by itself: the pull request's auto-merge is turned off and it waits for a person to review and merge it.
+# One attempt per break: if the branch's newest commit is already Claude's, it stops and asks for a person.
+# Needs the repository secret CLAUDE_CODE_OAUTH_TOKEN (made with `claude setup-token`); without it, it does nothing.
+#
+# Trust: this runs Claude, with the repository's write token, over code merged from Avick3110/houseCARL. Only use it
+# while that upstream, and everyone with write access here, is trusted.
+name: Sync fix
+
+on:
+  workflow_run:
+    workflows: ["CI", "Upstream sync"]
+    types: [completed]
+
+permissions:
+  contents: write        # push the fix
+  pull-requests: write   # turn off auto-merge, open the pull request, comment
+  actions: write         # read the failed run, start CI again
+  issues: write          # comment on the conflict issue
+  id-token: write        # the action asks for it
+
+concurrency:
+  group: sync-fix
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/Avick3110/houseCARL.git
+  BASE: amethyst-linux
+  SYNC: sync/upstream
+  BOT_NAME: claude[bot]
+  BOT_EMAIL: claude[bot]@users.noreply.github.com
+
+jobs:
+  # CI went red on the sync branch.
+  fix-ci:
+    name: fix a red sync
+    if: >-
+      github.event.workflow_run.name == 'CI' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch == 'sync/upstream'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Stop without the Claude token
+        id: token
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "No CLAUDE_CODE_OAUTH_TOKEN secret; leaving the red sync for a person."; echo "go=false" >> "$GITHUB_OUTPUT"
+          else echo "go=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Check out the sync branch
+        if: steps.token.outputs.go == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SYNC }}
+          fetch-depth: 0
+
+      - name: One attempt per break
+        id: guard
+        if: steps.token.outputs.go == 'true'
+        run: |
+          git config user.name "$BOT_NAME"; git config user.email "$BOT_EMAIL"
+          echo "before=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "$(git log -1 --format=%an)" = "$BOT_NAME" ]; then
+            gh pr comment "$SYNC" --body "CI is still red after Claude's fix attempt, so this needs a person. Failed run: ${{ github.event.workflow_run.html_url }}" || true
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            gh pr merge "$SYNC" --disable-auto || true   # a fix waits for a person
+            gh run view "${{ github.event.workflow_run.id }}" --log-failed > "$RUNNER_TEMP/ci-failure.log" || true
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up .NET 9
+        if: steps.guard.outputs.go == 'true'
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Fix it with Claude
+        if: steps.guard.outputs.go == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            This is the Linux / Amethyst fork of houseCARL. The daily merge of upstream (Avick3110/houseCARL main) into
+            the branch sync/upstream made CI fail. Fix the cause on this branch.
+
+            Read CLAUDE.md and docs/linux-and-amethyst.md first: the fork's rules and the reason for each fork change
+            are there. The failed CI output is in ${{ runner.temp }}/ci-failure.log (run: ${{ github.event.workflow_run.html_url }}).
+
+            Rules:
+            - Keep upstream's change and the fork's reason for its own. Never change behaviour for Mod Organizer 2.
+            - Never delete, skip or weaken a test to make it pass; fix the code or the fixture the test exposes.
+            - Build and test with `dotnet build housecarl.sln -c Release` and
+              `dotnet test src/housecarl-mcp-tests -c Release --no-build`. This runner is Linux, so Windows-only tests
+              skip here; reason about a Windows failure from the log.
+            - Commit small, with plain messages, and push to sync/upstream with `git push origin sync/upstream`.
+            - If you cannot fix it with confidence, commit nothing and say why in your final message.
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(dotnet:*),Bash(git:*),Bash(gh run view:*),Bash(gh pr view:*)"
+
+      - name: Run CI again on the fix, or ask for a person
+        if: steps.guard.outputs.go == 'true' && always()
+        run: |
+          git fetch -q origin "$SYNC"
+          if [ "$(git rev-parse "origin/$SYNC")" != "${{ steps.guard.outputs.before }}" ]; then
+            gh pr comment "$SYNC" --body "Claude pushed a fix for the red CI run (${{ github.event.workflow_run.html_url }}). CI is running again; auto-merge is off, so review and merge it yourself."
+            gh workflow run CI --ref "$SYNC"
+          else
+            gh pr comment "$SYNC" --body "Claude did not push a fix for the red CI run (${{ github.event.workflow_run.html_url }}); see this workflow's log for why. This needs a person."
+          fi
+
+  # The sync's merge conflicted (the sync workflow failed): resolve the merge.
+  fix-conflict:
+    name: resolve a conflicting sync
+    if: >-
+      github.event.workflow_run.name == 'Upstream sync' &&
+      github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Stop without the Claude token
+        id: token
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "No CLAUDE_CODE_OAUTH_TOKEN secret; leaving the conflict for a person."; echo "go=false" >> "$GITHUB_OUTPUT"
+          else echo "go=true" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Check out the fork's working branch
+        if: steps.token.outputs.go == 'true'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BASE }}
+          fetch-depth: 0
+
+      - name: Start the merge again, leaving the conflicts in place
+        id: merge
+        if: steps.token.outputs.go == 'true'
+        run: |
+          git config user.name "$BOT_NAME"; git config user.email "$BOT_EMAIL"
+          git remote add upstream "$UPSTREAM"
+          git fetch --no-tags upstream main
+          # A sync pull request with auto-merge off is waiting for a person (a fix Claude made, or a hold): leave it be.
+          waiting=$(gh pr list --head "$SYNC" --base "$BASE" --state open --json number,autoMergeRequest --jq '[.[] | select(.autoMergeRequest == null)][0].number // empty')
+          if [ -n "$waiting" ]; then
+            gh pr comment "$waiting" --body "Upstream main has moved on to $(git rev-parse --short upstream/main). This pull request is waiting for a review, so the sync left it as it is; merge or close it and the next sync takes the rest."
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sha=$(git rev-parse --short upstream/main)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          git switch -C "$SYNC"
+          if git merge --no-ff --no-edit -m "Merge upstream main ($sha) into $BASE" upstream/main; then
+            echo "The merge is clean now; nothing to resolve."; echo "go=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > "$RUNNER_TEMP/conflicts.txt"
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up .NET 9
+        if: steps.merge.outputs.go == 'true'
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Resolve it with Claude
+        if: steps.merge.outputs.go == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            This is the Linux / Amethyst fork of houseCARL. Merging upstream (Avick3110/houseCARL main, at
+            ${{ steps.merge.outputs.sha }}) into the fork's branch amethyst-linux conflicts. The merge is in progress on
+            the branch sync/upstream with the conflicts in the working tree; the conflicting files are listed in
+            ${{ runner.temp }}/conflicts.txt.
+
+            Read CLAUDE.md and docs/linux-and-amethyst.md first: the fork's rules, and the "What changed, and where"
+            table that says where each fork change lives and why.
+
+            Rules:
+            - Resolve every conflict keeping both sides: upstream's change, and the fork's reason for its own. Never
+              change behaviour for Mod Organizer 2.
+            - Never delete, skip or weaken a test.
+            - Finish the merge with `git commit --no-edit`, then build and test with `dotnet build housecarl.sln -c Release`
+              and `dotnet test src/housecarl-mcp-tests -c Release --no-build`, fixing what the merge broke in small
+              further commits. This runner is Linux, so Windows-only tests skip here.
+            - Do not push; the workflow pushes the branch when you are done.
+            - If you cannot resolve it with confidence, run `git merge --abort` and say why in your final message.
+          claude_args: >-
+            --max-turns 120
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(dotnet:*),Bash(git:*)"
+
+      - name: Open the pull request for review and run CI, or ask for a person
+        if: steps.merge.outputs.go == 'true' && always()
+        env:
+          SHA: ${{ steps.merge.outputs.sha }}
+        run: |
+          issue=$(gh issue list --state open --search "in:title Upstream sync conflicts" --json number --jq '.[0].number // empty')
+          if git rev-parse -q --verify MERGE_HEAD >/dev/null || ! git merge-base --is-ancestor upstream/main HEAD; then
+            [ -n "$issue" ] && gh issue comment "$issue" --body "Claude did not resolve the merge of upstream $SHA; see the Sync fix run's log for why. This needs a person."
+            exit 0
+          fi
+          git push --force origin "$SYNC"
+          title="Merge upstream main ($SHA), conflicts resolved by Claude"
+          body="Claude resolved the conflicts merging upstream main ($SHA). Auto-merge is off: review the resolution and merge it yourself once CI passes. See docs/linux-and-amethyst.md, Keeping up with upstream."
+          pr=$(gh pr list --head "$SYNC" --base "$BASE" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$pr" ]; then gh pr create --head "$SYNC" --base "$BASE" --title "$title" --body "$body"
+          else gh pr edit "$pr" --title "$title" --body "$body"; gh pr merge "$pr" --disable-auto || true; fi
+          gh workflow run CI --ref "$SYNC"
+          [ -n "$issue" ] && gh issue comment "$issue" --body "Claude resolved the merge; review it in the sync pull request." || true

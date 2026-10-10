@@ -191,8 +191,20 @@ Upstream merges several pull requests a day, so the fork takes them daily, in sm
 
 The checks that catch a fork-specific break in a merge that is otherwise clean: the Linux job itself (casing, paths,
 Wine), `ManagerWordingTests` (an upstream rewording of an MO2 remedy the Amethyst table swaps), and the Amethyst tests.
-A later step can have Claude Code fix a red or conflicting sync in the same pull request, for a person to review; it
-is not set up yet.
+**Claude fixes a red or conflicting sync** (`.github/workflows/sync-fix.yml`), with Anthropic's
+`anthropics/claude-code-action`, signed in with the repository secret `CLAUDE_CODE_OAUTH_TOKEN` (made with
+`claude setup-token` on a Claude subscription; without the secret it does nothing):
+- CI red on `sync/upstream`: auto-merge is turned off, Claude gets the failed log, fixes the cause on the branch
+  following `CLAUDE.md` and this guide, and CI runs again.
+- The sync's merge conflicted: Claude redoes the merge, resolves it keeping both sides, and the pull request opens
+  with auto-merge off.
+- A fix Claude made never merges by itself: a person reviews and merges it. One attempt per break: if the branch's
+  newest commit is already Claude's, it comments that a person is needed and stops. While a sync pull request waits
+  with auto-merge off, neither workflow touches its branch; the daily sync only notes that upstream moved on.
+- Claude may only edit files and run `dotnet`, `git` and read-only `gh run view` / `gh pr view`; it is told never to
+  delete, skip or weaken a test and never to change MO2 behaviour, and to commit nothing when unsure.
+- It runs Claude with the repository's write token over code merged from upstream, so it is for a trusted upstream
+  and a repository whose writers are all trusted.
 
 ## When a Linux user reports…
 
