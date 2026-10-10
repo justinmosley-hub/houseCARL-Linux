@@ -1,27 +1,35 @@
-# houseCARL CI — a green/red gate on every push to main and every pull request.
-# What it does, in plain terms: a fresh Windows machine on GitHub's servers compiles
-# houseCARL and runs its tests. Green = it builds and the core logic passes; red = something
-# broke. The tests that need the Creation Kit's Papyrus compiler, which isn't installed on the
-# runner, report as skipped, so the run stays a reliable gate without it.
+# houseCARL CI — a green/red gate on every push to amethyst-linux and every pull request.
+# What it does, in plain terms: a fresh Linux machine on GitHub's servers compiles houseCARL, runs its
+# tests, builds the Linux package and validates it. Green = it builds, the tests pass and the package is
+# sound; red = something broke. The tests that need Wine, Steam or the Creation Kit, none of which the
+# runner has, report as skipped, so the run stays a reliable gate without them.
+#
+# This is the Linux / Amethyst fork (docs/linux-and-amethyst.md), so it builds and tests on Linux only:
+# file names are case-sensitive, `\` is not a separator, and the Windows tools run through Wine. The
+# Windows package is upstream's (Avick3110/houseCARL), built by upstream's CI.
+#
+# Also called by release.yml, so a release ships the package this run built and tested.
 name: CI
 
 on:
   push:
-    branches: [main, amethyst-linux]   # amethyst-linux: the Linux / Amethyst fork's working branch
+    branches: [main, amethyst-linux]   # amethyst-linux: the fork's working branch; main: a mirror of upstream
   pull_request:
   workflow_dispatch:   # a run started by hand (gh workflow run CI, or the Actions tab)
+  workflow_call:       # release.yml runs this and publishes the package it uploads
 
 # Cancel a superseded in-progress run on the SAME pull request when a newer commit is pushed
-# (saves runner time and queue contention while iterating on a PR). Never cancel main-branch
-# (push) runs — every commit that lands on main must be verified end-to-end.
+# (saves runner time and queue contention while iterating on a PR). Never cancel a push run:
+# every commit that lands on amethyst-linux must be verified end-to-end.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-and-probe:
-    name: build + probes
-    runs-on: windows-latest   # houseCARL is a Windows-only (Skyrim SE) product — match that
+  # The job's name is what the amethyst-linux branch protection requires; renaming it needs the rule changed too.
+  linux:
+    name: build + probes (Linux)
+    runs-on: ubuntu-latest
     steps:
       - name: Check out the code
         uses: actions/checkout@v7
@@ -48,28 +56,16 @@ jobs:
       - name: Build the whole solution (Release)
         run: dotnet build housecarl.sln --configuration Release
 
-      # The two tracked THIRD-PARTY-NOTICES.txt copies are generated from the server publish output, so a
-      # dependency bump changes what they should say. Nothing else in CI publishes the server, so this step
-      # does it (Release, win-x64, framework-dependent - the same shape build-plugin.ps1 publishes) and
-      # regenerates into memory. The step goes red if either tracked copy differs from what now ships.
-      # It publishes into dist/, which the plugin-tree assembly step below wipes on its way past.
-      - name: Notices — the tracked copies match what ships
-        if: ${{ !cancelled() }}
-        shell: pwsh
-        run: |
-          dotnet publish src/housecarl-mcp -c Release -r win-x64 --self-contained false -o dist/notices-check/server
-          ./scripts/generate-notices.ps1 -PublishDir dist/notices-check/server -Check
-
       # Every guard is an xUnit test in this project.
       - name: Tests — the 2.0 guard project (dotnet test)
         if: ${{ !cancelled() }}
         run: dotnet test src/housecarl-mcp-tests --configuration Release --no-build --logger "trx;LogFileName=guards.trx"
 
       # `dotnet test` exits 0 when it selects NOTHING — measured. So a filter added later (a new tier, a typo)
-      # can take every guard out of CI and leave the step green with no signal. This
-      # reads the run's own trx and fails on an empty or failing run, which is also what makes the --logger flag
-      # above load-bearing rather than an artifact nobody opens. The floor is derived from the run, not a pinned
-      # number: it says "something ran and nothing failed", and the count is printed so a collapse is visible.
+      # can take every guard out of CI and leave the step green with no signal. This reads the run's own trx
+      # and fails on an empty or failing run, which is also what makes the --logger flag above load-bearing
+      # rather than an artifact nobody opens. The floor is derived from the run, not a pinned number: it says
+      # "something ran and nothing failed", and the count is printed so a collapse is visible.
       - name: Tests — the run was not empty (a filter that matches nothing exits 0)
         if: ${{ !cancelled() }}
         shell: pwsh
@@ -97,131 +93,19 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm install -g @anthropic-ai/claude-code@2.1.245
 
-      # -PluginTreeOnly assembles dist/housecarl (skills + plugin files) and skips the server
-      # publish, setup exe and zip — none of which the validator reads.
-      - name: Assemble the plugin tree
-        id: assemble
-        if: ${{ !cancelled() }}
-        run: ./scripts/build-plugin.ps1 -PluginTreeOnly
-
-      # Skipped when the assembly failed: step 0 wipes dist/, so validating after a failed assemble
-      # would report a missing manifest and bury the real error.
-      - name: Validate the plugin package (claude plugin validate --strict)
-        if: ${{ !cancelled() && steps.assemble.outcome == 'success' }}
-        run: claude plugin validate ./dist/housecarl --strict
-
-      # The three coverage steps run on the push event only — which is push to main only because
-      # the trigger above scopes push to that branch — since the numbers are for W5 planning, not
-      # per-PR gating, and skipping them finishes a PR about four minutes sooner.
-      #
-      # The three coverage steps are LAST in the job, deliberately. This is visibility only — no
-      # threshold, no gate, and `continue-on-error` on each so nothing they do can turn the job red
-      # — but the collect is a SECOND full run of the suite under a CLR profiler that spawns
-      # housecarl-mcp.exe, and it takes about four minutes. Anywhere earlier and every gating step
-      # after it waits on a step that is not allowed to matter, and a stray server process or a
-      # locked temp file it left behind would go red on a step that is. Nothing runs after them, so
-      # the worst case is spent minutes.
-      #
-      # The collector is "Code Coverage", which ships with Microsoft.NET.Test.Sdk (no new package),
-      # and it is here instead of coverlet for a measured reason: these tests drive the BUILT
-      # housecarl-mcp.exe as a separate process, and coverlet's in-process collector cannot see a
-      # child. Measured on the 316 tier=stdio tests — coverlet reported Program.cs 0/125 and
-      # RecordsTools.cs 0/2340 for the same run where this collector reported 99/125 and 732/2340.
-      # coverlet.collector stays referenced for an offline in-process run via coverage.runsettings;
-      # this suite's spawned server fails under two attached profilers, so they cannot be combined.
-      #
-      # This run selects what the gating step selects and is deliberately unguarded: it writes no
-      # trx, and the gate's own zero-test check reads the gating run's trx above. If the gating step
-      # gains a filter, give this one the same or the summary describes a different set of tests.
-      - name: Coverage — collect (visibility only)
-        if: ${{ !cancelled() && github.event_name == 'push' }}
-        continue-on-error: true
-        run: dotnet test src/housecarl-mcp-tests --configuration Release --no-build --collect "Code Coverage;Format=cobertura" --results-directory coverage
-
-      # Its own step, because the collect above is a separate command: GitHub's pwsh shell sets
-      # $ErrorActionPreference = 'stop', and on pwsh 7.4 a native command exiting non-zero ends the
-      # script — so one test flaking under the profiler would write the report and then skip the
-      # summary the step exists to publish. `!cancelled()` runs it whatever the collect did (on a
-      # push, where the event arm lets both run), and the script says in one sentence when there is
-      # no report to read.
-      - name: Coverage — summary for this run (visibility only)
-        if: ${{ !cancelled() && github.event_name == 'push' }}
-        continue-on-error: true
-        shell: pwsh
-        run: ./scripts/coverage-summary.ps1 -Path coverage
-
-      # The raw report, so the numbers in the summary can be re-derived without a signed-in session.
-      - name: Coverage — upload the report
-        if: ${{ !cancelled() && github.event_name == 'push' }}
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: coverage-cobertura
-          path: coverage/**/*.cobertura.xml
-          if-no-files-found: warn
-
-  # The Linux / Amethyst fork (docs/linux-and-amethyst.md): the same suite on Linux, where file names are
-  # case-sensitive, `\` is not a separator and the Windows tools run through Wine, then the Linux package
-  # built by build-plugin.ps1 -Runtime linux-x64 and validated. No Wine, Steam or Creation Kit on the runner:
-  # the tests that need them skip, and NoRealWine keeps every test off the real Wine.
-  linux:
-    name: build + probes (Linux)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out the code
-        uses: actions/checkout@v7
-
-      - name: Set up .NET 9
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.nuget/packages
-            !~/.nuget/packages/nifly
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'nuget.config', 'packages/local/*.nupkg') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
-
-      - name: Build the whole solution (Release)
-        run: dotnet build housecarl.sln --configuration Release
-
-      - name: Tests — the 2.0 guard project (dotnet test)
-        if: ${{ !cancelled() }}
-        run: dotnet test src/housecarl-mcp-tests --configuration Release --no-build --logger "trx;LogFileName=guards.trx"
-
-      # The same zero-tests guard as the Windows job: `dotnet test` exits 0 when it selects nothing.
-      - name: Tests — the run was not empty (a filter that matches nothing exits 0)
-        if: ${{ !cancelled() }}
-        shell: pwsh
-        run: |
-          $trx = Get-ChildItem -Recurse -Filter guards.trx src/housecarl-mcp-tests/TestResults |
-                 Sort-Object LastWriteTime | Select-Object -Last 1
-          if (-not $trx) { throw "No guards.trx was produced - the test step did not run to completion." }
-          $c = ([xml](Get-Content $trx.FullName)).TestRun.ResultSummary.Counters
-          "guards.trx: total=$($c.total) executed=$($c.executed) passed=$($c.passed) failed=$($c.failed)"
-          if ([int]$c.executed -eq 0) { throw "The guard suite selected ZERO tests. The filter excludes everything it should not." }
-          if ([int]$c.failed -ne 0) { throw "$($c.failed) guard test(s) failed." }
-
-      - name: Set up Node 22
-        if: ${{ !cancelled() }}
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-
-      - name: Install the Claude Code CLI
-        if: ${{ !cancelled() }}
-        run: npm install -g @anthropic-ai/claude-code@2.1.245
-
       # The whole Linux package: corpus, server publish, notices, skills, leak-checks, zip.
       - name: Build the Linux package
         id: package
         if: ${{ !cancelled() }}
         shell: pwsh
         run: ./scripts/build-plugin.ps1 -Runtime linux-x64
+
+      # The package build rewrites the two tracked THIRD-PARTY-NOTICES.txt copies from the server it just
+      # published, so a dependency bump changes what they should say. The step goes red if either tracked copy
+      # now differs from what ships: commit the rewritten copies.
+      - name: Notices — the tracked copies match what ships
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: git diff --exit-code -- THIRD-PARTY-NOTICES.txt plugin/THIRD-PARTY-NOTICES.txt
 
       - name: Validate the Linux plugin package (claude plugin validate --strict)
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
@@ -234,3 +118,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/unzipped" && unzip -q release/houseCARL-*-linux-x64.zip -d "$RUNNER_TEMP/unzipped"
           test -x "$RUNNER_TEMP/unzipped/houseCARL/housecarl/server/housecarl-mcp"
           test -f "$RUNNER_TEMP/unzipped/houseCARL/housecarl/server/corpus.json"
+
+      # The zip this run built and checked, kept two weeks: release.yml publishes it, and anyone can try a
+      # pull request's package without building it.
+      - name: Upload the Linux package
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-package
+          path: release/houseCARL-*-linux-x64.zip
+          if-no-files-found: error
+          retention-days: 14

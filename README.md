@@ -20,7 +20,7 @@
 >   profile switch, deploy or restore is picked up without a restart.
 >
 > Not done yet: writing patches into Amethyst (new patches would land in its mods folder but are not yet
-> Amethyst-aware), Papyrus compile through Wine, and a Linux release package.
+> Amethyst-aware), Papyrus compile through Wine, and the first Linux release (the package and its release workflow are in place).
 >
 > What changed and why, written for anyone who knows houseCARL and Windows but not Linux:
 > [docs/linux-and-amethyst.md](docs/linux-and-amethyst.md). The rest of this README is upstream's and describes
@@ -190,7 +190,10 @@ dotnet build housecarl.sln -c Release
 dotnet test src/housecarl-mcp-tests -c Release --no-build
 ```
 
-There is no Linux release package yet. More detail is in [docs/linux-and-amethyst.md](docs/linux-and-amethyst.md).
+The Linux package, `houseCARL-<version>-linux-x64.zip`, is on this fork's
+[releases page](https://github.com/justinmosley-hub/houseCARL-Linux/releases): unzip it and follow `houseCARL/START-HERE.txt`.
+Every CI run also keeps the zip it built as its `linux-package` artifact. More detail is in
+[docs/linux-and-amethyst.md](docs/linux-and-amethyst.md).
 
 ## Install
 

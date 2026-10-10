@@ -1,0 +1,55 @@
+# houseCARL release — the Linux / Amethyst fork's package on GitHub Releases (docs/linux-and-amethyst.md,
+# "Releasing").
+# What it does, in plain terms: pushing a tag like v2.0.4-linux runs CI (build, tests, package, validation)
+# on that commit, and when CI is green, publishes the zip CI built as a GitHub Release under that tag. A red
+# CI run publishes nothing. The tag must start with the version in plugin/.claude-plugin/plugin.json, which is
+# the version the zip is named and stamped with, so a tag can never publish a zip of another version.
+#
+# Why "-linux": upstream (Avick3110/houseCARL) tags its Windows releases v<ver>, and those tags reach this
+# fork with the upstream merges; the fork's own tags carry the suffix so the two never collide.
+name: Release
+
+on:
+  push:
+    tags: ['v*-linux*']   # v2.0.4-linux, v2.0.4-linux.2 (a second cut of the same version)
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: publish the release
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create the release and attach the zip
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: The tag names the version plugin.json carries
+        run: |
+          version=$(jq -r .version plugin/.claude-plugin/plugin.json)
+          case "$TAG" in
+            "v$version-linux"|"v$version-linux."*) echo "Tag $TAG matches plugin.json version $version." ;;
+            *) echo "::error::Tag $TAG does not start with v$version-linux (plugin.json says $version). Bump plugin.json or retag."; exit 1 ;;
+          esac
+
+      - name: Download the package CI built
+        uses: actions/download-artifact@v7
+        with:
+          name: linux-package
+          path: release
+
+      - name: Publish the GitHub Release
+        run: |
+          zip=$(ls release/houseCARL-*-linux-x64.zip)
+          notes="The Linux package of houseCARL for Amethyst: unzip, then follow \`houseCARL/START-HERE.txt\`. Built and tested by CI run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. What changed since upstream and why: docs/linux-and-amethyst.md."
+          gh release create "$TAG" "$zip" --title "houseCARL $TAG" --notes "$notes" --generate-notes --verify-tag

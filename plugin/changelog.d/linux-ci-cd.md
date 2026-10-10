@@ -1,0 +1,1 @@
+- **The Linux package is published on the fork's GitHub Releases page as `houseCARL-<version>-linux-x64.zip`, built and tested by CI on the tagged commit.** Check it: the Releases page of justinmosley-hub/houseCARL-Linux, and the `linux-package` artifact on any CI run.
