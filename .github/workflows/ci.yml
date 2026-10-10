@@ -7,7 +7,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, amethyst-linux]   # amethyst-linux: the Linux / Amethyst fork's working branch
   pull_request:
 
 # Cancel a superseded in-progress run on the SAME pull request when a newer commit is pushed
@@ -158,3 +158,78 @@ jobs:
           name: coverage-cobertura
           path: coverage/**/*.cobertura.xml
           if-no-files-found: warn
+
+  # The Linux / Amethyst fork (docs/linux-and-amethyst.md): the same suite on Linux, where file names are
+  # case-sensitive, `\` is not a separator and the Windows tools run through Wine, then the Linux package
+  # built by build-plugin.ps1 -Runtime linux-x64 and validated. No Wine, Steam or Creation Kit on the runner:
+  # the tests that need them skip, and NoRealWine keeps every test off the real Wine.
+  linux:
+    name: build + probes (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+
+      - name: Set up .NET 9
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.nuget/packages
+            !~/.nuget/packages/nifly
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'nuget.config', 'packages/local/*.nupkg') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Build the whole solution (Release)
+        run: dotnet build housecarl.sln --configuration Release
+
+      - name: Tests — the 2.0 guard project (dotnet test)
+        if: ${{ !cancelled() }}
+        run: dotnet test src/housecarl-mcp-tests --configuration Release --no-build --logger "trx;LogFileName=guards.trx"
+
+      # The same zero-tests guard as the Windows job: `dotnet test` exits 0 when it selects nothing.
+      - name: Tests — the run was not empty (a filter that matches nothing exits 0)
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Recurse -Filter guards.trx src/housecarl-mcp-tests/TestResults |
+                 Sort-Object LastWriteTime | Select-Object -Last 1
+          if (-not $trx) { throw "No guards.trx was produced - the test step did not run to completion." }
+          $c = ([xml](Get-Content $trx.FullName)).TestRun.ResultSummary.Counters
+          "guards.trx: total=$($c.total) executed=$($c.executed) passed=$($c.passed) failed=$($c.failed)"
+          if ([int]$c.executed -eq 0) { throw "The guard suite selected ZERO tests. The filter excludes everything it should not." }
+          if ([int]$c.failed -ne 0) { throw "$($c.failed) guard test(s) failed." }
+
+      - name: Set up Node 22
+        if: ${{ !cancelled() }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Install the Claude Code CLI
+        if: ${{ !cancelled() }}
+        run: npm install -g @anthropic-ai/claude-code@2.1.245
+
+      # The whole Linux package: corpus, server publish, notices, skills, leak-checks, zip.
+      - name: Build the Linux package
+        id: package
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./scripts/build-plugin.ps1 -Runtime linux-x64
+
+      - name: Validate the Linux plugin package (claude plugin validate --strict)
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: claude plugin validate ./dist/housecarl --strict
+
+      # The server must stay executable through the zip, or Claude Code cannot start it after unzipping.
+      - name: The packaged server is executable after unzipping
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/unzipped" && unzip -q release/houseCARL-*-linux-x64.zip -d "$RUNNER_TEMP/unzipped"
+          test -x "$RUNNER_TEMP/unzipped/houseCARL/housecarl/server/housecarl-mcp"
+          test -f "$RUNNER_TEMP/unzipped/houseCARL/housecarl/server/corpus.json"

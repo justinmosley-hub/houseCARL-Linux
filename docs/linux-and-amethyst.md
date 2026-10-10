@@ -149,6 +149,10 @@ desktop app's config); and the zip is `release/houseCARL-<ver>-linux-x64.zip`. T
 builder's own home folder. The script's paths are written with `/`, which Windows PowerShell reads too, so the
 Windows build is unchanged. The zip keeps the server's executable mark (checked by unzipping it).
 
+**CI** runs a Linux job (`ubuntu-latest`) beside upstream's Windows one in `.github/workflows/ci.yml`: the build, the
+suite with the same zero-tests guard, then the Linux package built and validated, and a check that the server is still
+executable after unzipping. The runner has no Wine, Steam or Creation Kit, so the tests that need them skip.
+
 A test that cannot run on one OS is marked so it reports as **skipped**, never as passed: `[WindowsFact("what Linux
 lacks")]` for Windows-only behaviour, `[CaseSensitiveDiskFact]` for one that needs a case-sensitive disk. Never `return`
 early from a test body: that reports a pass for a test that did not run.
