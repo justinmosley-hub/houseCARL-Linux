@@ -72,7 +72,8 @@ on Wine's `Z:` drive (`/home/me/x` is `Z:\home\me\x`), which every prefix maps t
 **Nothing to set up.** Every Linux Skyrim player has Steam's Proton, so houseCARL uses it: on each start it finds the
 newest Proton in any Steam library (Proton carries the Mono the compiler, a .NET program, needs), so a Proton update or
 a new version is followed by itself. It runs them in its own prefix (a prefix is Wine's private "Windows install"),
-never a game's; Wine creates it on first use in a few seconds. Without Proton it falls back to `wine` on PATH where
+never a game's; Wine creates it on first use in a few seconds, and it takes about 630 MB (a Windows system with Proton's
+Mono), which deleting the folder gives back. Without Proton it falls back to `wine` on PATH where
 that can run the program, and otherwise says where it looked. [ADR 0008](decisions/0008-windows-tools-run-through-wine.md)
 has the order and why houseCARL does not download Wine itself.
 

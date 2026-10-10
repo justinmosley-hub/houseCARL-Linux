@@ -62,7 +62,9 @@ COMPILING PAPYRUS SCRIPTS  (optional)
       path to  <Skyrim Special Edition>/Papyrus Compiler/PapyrusCompiler.exe
 
   houseCARL runs the compiler in its own Wine prefix,
-  ~/.local/share/houseCARL/wineprefix -- never your game's.
+  ~/.local/share/houseCARL/wineprefix -- never your game's. It is
+  created on first use (a few seconds, about 630 MB); delete it any
+  time and houseCARL makes a fresh one.
 
 
 UPDATING AND REMOVING

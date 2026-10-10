@@ -86,6 +86,9 @@ Amethyst's profile files. What Amethyst then does, read from its source:
 - Enabling a mod ticks its plugins and puts each at the END of the load order unless `loadorder.txt` remembers a slot
   for it (`insert_by_loadorder`), so a new patch overrides what is already there, as in MO2.
 - The game sees a new or newly enabled mod only after a Deploy.
+- A write that fails after cutting its fresh folder removes that folder again (upstream's rule in
+  `output-and-artifacts.md`), so for a moment a houseCARL folder exists in the mods folder. An Amethyst refresh in that
+  moment would list it, and the next refresh drops the entry once the folder is gone.
 - Amethyst rewrites a mod's `meta.ini` through Python's `configparser`, which keeps other sections but lower-cases keys
   and writes `key = value`. The ownership check (`HousecarlOwnerMeta.MarksOwned`) ignores case and spaces, so a
   patch stays houseCARL's.
