@@ -29,6 +29,7 @@ env:
   UPSTREAM: https://github.com/Avick3110/houseCARL.git
   BASE: amethyst-linux
   SYNC: sync/upstream
+  GH_REPO: ${{ github.repository }}   # gh follows a remote named upstream over origin; keep it on the fork
 
 jobs:
   sync:

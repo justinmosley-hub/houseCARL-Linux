@@ -189,6 +189,13 @@ Upstream merges several pull requests a day, so the fork takes them daily, in sm
    the files. Merge by hand keeping both sides: upstream's change and the fork's reason for its own (the "What
    changed, and where" table above says where each fork change lives and why).
 
+**Settings the sync needs.** The workflows open pull requests and issues with the workflow's own token, which needs
+two repository settings a fork starts without: Settings > Actions > General > "Allow GitHub Actions to create and
+approve pull requests", and Settings > General > Features > Issues. Without the first, `gh pr create` fails with
+"Resource not accessible by integration". Both workflows also set `GH_REPO` to this repository: they add a git remote
+named `upstream`, and the `gh` CLI, given no repository, acts on the `upstream` remote ahead of `origin`, so every
+`gh pr` and `gh issue` call would otherwise go to Avick3110/houseCARL and be refused with that same error.
+
 The checks that catch a fork-specific break in a merge that is otherwise clean: the Linux job itself (casing, paths,
 Wine), `ManagerWordingTests` (an upstream rewording of an MO2 remedy the Amethyst table swaps), and the Amethyst tests.
 **Claude fixes a red or conflicting sync** (`.github/workflows/sync-fix.yml`), with Anthropic's
