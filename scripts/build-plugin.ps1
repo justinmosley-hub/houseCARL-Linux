@@ -22,6 +22,12 @@
   After it succeeds, run the validation gate (necessary, not sufficient):
       claude plugin validate ./dist/housecarl --strict
 
+  -Runtime picks the server's platform: win-x64 (the default) builds the Windows package; linux-x64
+  builds the Linux one, whose server is `housecarl-mcp` (no .exe), whose START-HERE note is
+  packaging/START-HERE-linux.txt, which has no setup utility (Claude Code installs the plugin itself),
+  and whose zip is houseCARL-<ver>-linux-x64.zip. Run it with PowerShell 7 (`pwsh`) on Linux; see
+  docs/linux-and-amethyst.md.
+
   -PluginTreeOnly assembles just dist/housecarl (skills + plugin files) and the Codex skill tree,
   runs the skill leak-check over both, and stops: no corpus, no server publish, no setup exe, no
   zip. dist/housecarl is the whole tree `claude plugin validate` reads, and it is what CI runs the
@@ -34,7 +40,7 @@
   NOTE: keep this file ASCII-only. Windows PowerShell 5.1 misreads UTF-8 non-ASCII bytes
   (em-dashes, section signs) as CP1252 and fails to parse.
 #>
-param([switch]$PluginTreeOnly)
+param([switch]$PluginTreeOnly, [string]$Runtime = 'win-x64')
 $ErrorActionPreference = 'Stop'
 
 # ---- paths -----------------------------------------------------------------
@@ -48,13 +54,15 @@ $CodexSkills  = Join-Path $CodexRoot 'skills'           # Codex skill dirs are i
 $PluginSrc    = Join-Path $RepoRoot 'plugin'
 $GeneratedDir = Join-Path $RepoRoot 'generated'
 $CorpusSrc    = Join-Path $GeneratedDir 'corpus.json'
-$RefDir       = Join-Path $RepoRoot '.claude\skills\mutagen-reference\references'
-$GenProj      = Join-Path $RepoRoot 'src\housecarl-generator'
-$McpProj      = Join-Path $RepoRoot 'src\housecarl-mcp'
-$SetupProj    = Join-Path $RepoRoot 'src\housecarl-setup'
+$RefDir       = Join-Path $RepoRoot '.claude/skills/mutagen-reference/references'
+$GenProj      = Join-Path $RepoRoot 'src/housecarl-generator'
+$McpProj      = Join-Path $RepoRoot 'src/housecarl-mcp'
+$SetupProj    = Join-Path $RepoRoot 'src/housecarl-setup'
 $PackagingSrc = Join-Path $RepoRoot 'packaging'        # tracked source for package-root extras
 $ReleaseDir   = Join-Path $RepoRoot 'release'          # output dir for the shippable zip (gitignored)
-$PluginManifest = Join-Path $PluginSrc '.claude-plugin\plugin.json'   # single source of truth for the version
+$PluginManifest = Join-Path $PluginSrc '.claude-plugin/plugin.json'   # single source of truth for the version
+$OnWindows    = $Runtime -like 'win-*'                 # the server's platform, not the build machine's
+$ExeName      = if ($OnWindows) { 'housecarl-mcp.exe' } else { 'housecarl-mcp' }
 
 # the 7 shipped skills (the modlist-authoring cluster was removed; facegen-diagnostics became the facegen
 # findings family on housecarl_check, with its causes table at docs/facegen.md, and the dialogue skill's
@@ -92,10 +100,10 @@ if (-not $PluginTreeOnly) {
   # ---- 2. publish the server (framework-dependent; trimming OFF) -------------
   # -p:Version stamps the plugin.json version into the exe, which ServerInfo reports over MCP
   # (one version home; an unstamped dev build says 0.0.0-dev).
-  Step '2/12' 'Publish server (Release, win-x64, framework-dependent)'
-  dotnet publish $McpProj -c Release -r win-x64 --self-contained false -p:Version=$Version -o $ServerDir
+  Step '2/12' "Publish server (Release, $Runtime, framework-dependent)"
+  dotnet publish $McpProj -c Release -r $Runtime --self-contained false -p:Version=$Version -o $ServerDir
   if ($LASTEXITCODE -ne 0) { throw "publish failed (exit $LASTEXITCODE)" }
-  $Exe = Join-Path $ServerDir 'housecarl-mcp.exe'
+  $Exe = Join-Path $ServerDir $ExeName
   if (-not (Test-Path $Exe)) { throw "server exe not produced at $Exe" }
 
   # strip dev-only appsettings.json (carries absolute dev paths - must not ship)
@@ -124,7 +132,7 @@ if (-not $PluginTreeOnly) {
 Step '5/12' 'Bundle skills (plugin tree + Codex umbrella)'
 New-Item -ItemType Directory -Path $SkillsDir -Force | Out-Null
 foreach ($s in $Skills) {
-  $src = Join-Path $RepoRoot ".claude\skills\$s"
+  $src = Join-Path $RepoRoot ".claude/skills/$s"
   if (-not (Test-Path $src)) { throw "skill not found: $src" }
   Copy-Item $src (Join-Path $SkillsDir $s) -Recurse -Force
 }
@@ -152,6 +160,13 @@ Step '6/12' 'Copy plugin files'
 Copy-Item (Join-Path $PluginSrc '.claude-plugin') $DistRoot -Recurse -Force   # -> dist/housecarl/.claude-plugin/plugin.json
 foreach ($f in @('.mcp.json','LICENSE','THIRD-PARTY-NOTICES.txt','README.md')) {
   Copy-Item (Join-Path $PluginSrc $f) (Join-Path $DistRoot $f) -Force
+}
+# the server command names the exe; off Windows it has no .exe
+if (-not $OnWindows) {
+  $McpJson = Join-Path $DistRoot '.mcp.json'
+  $mcp = (Get-Content $McpJson -Raw).Replace('/server/housecarl-mcp.exe"', '/server/housecarl-mcp"')
+  if ($mcp -notmatch '/server/housecarl-mcp"') { throw ".mcp.json does not name /server/housecarl-mcp.exe; update this rewrite" }
+  [System.IO.File]::WriteAllText($McpJson, $mcp, (New-Object System.Text.UTF8Encoding($false)))
 }
 # the shipped changelog carries plugin/changelog.d's fragments under Unreleased; the repo file and fragments stay as they are
 & (Join-Path $PSScriptRoot 'fold-changelog.ps1') -Version Unreleased -OutFile (Join-Path $DistRoot 'CHANGELOG.md')
@@ -186,7 +201,7 @@ foreach ($r in $SkillRoots) {
     Get-ChildItem $skillDir.FullName -Recurse -Force -File | ForEach-Object { $shipped[$_.Name] = $true }
     foreach ($doc in (Get-ChildItem $skillDir.FullName -Recurse -Force -File -Filter '*.md')) {
       $docCount++
-      $rel     = ($doc.FullName.Substring($skillDir.FullName.Length).TrimStart('\')) -replace '\\','/'
+      $rel     = ($doc.FullName.Substring($skillDir.FullName.Length).TrimStart('\', '/')) -replace '\\','/'
       $docText = Get-Content $doc.FullName -Raw
       if (-not $docText) { $pointerFails += ("{0} ships an empty {1}." -f $skillDir.Name, $rel); continue }
       # a references/ or evals/ pointer in any spelling, plus a bare mention of the stripped status note
@@ -241,7 +256,8 @@ if ($PluginTreeOnly) {
 # Source: packaging/ (tracked). START-HERE.txt is version-stamped from plugin.json;
 # marketplace.json is the local CLI-install descriptor (`claude plugin marketplace add <this folder>`).
 Step '8/12' 'Package-root extras (START-HERE.txt + marketplace.json)'
-$startHere = (Get-Content (Join-Path $PackagingSrc 'START-HERE.txt') -Raw) -replace '\{\{VERSION\}\}', $Version
+$StartHereSrc = Join-Path $PackagingSrc $(if ($OnWindows) { 'START-HERE.txt' } else { 'START-HERE-linux.txt' })
+$startHere = (Get-Content $StartHereSrc -Raw) -replace '\{\{VERSION\}\}', $Version
 if ($startHere -match '\{\{') { throw "START-HERE.txt has an unresolved {{token}} after substitution" }
 [System.IO.File]::WriteAllText((Join-Path $PkgRoot 'START-HERE.txt'), $startHere, (New-Object System.Text.UTF8Encoding($false)))
 $MpDir = Join-Path $PkgRoot '.claude-plugin'
@@ -260,14 +276,18 @@ Copy-Item (Join-Path $PackagingSrc 'marketplace.json') (Join-Path $MpDir 'market
 # missing the base .NET Runtime never reaches app code: hostfxr writes its missing-framework message to
 # stderr, which a double-clicked console window destroys on exit, so the docs name the flash-and-close
 # as the diagnosis rather than promising a message. Trimming is self-contained only, so it is gone.
+# Off Windows there is no setup utility: it writes the Windows desktop app's config, and Claude Code installs the
+# plugin itself (`claude plugin marketplace add` + `claude plugin install`, in START-HERE-linux.txt).
 Step '9/12' 'Publish the setup utility (houseCARL-Setup.exe) into dist/'
-# -p:Version stamps the plugin.json version into the exe, which the setup banner reads back off its own
-# assembly (one version home; an unstamped dev build says 0.0.0-dev), exactly as step 2 does for the server.
-dotnet publish $SetupProj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false -o $PkgRoot
-if ($LASTEXITCODE -ne 0) { throw "setup-utility publish failed (exit $LASTEXITCODE)" }
 $SetupExe = Join-Path $PkgRoot 'houseCARL-Setup.exe'
-if (-not (Test-Path $SetupExe)) { throw "setup utility not produced at $SetupExe" }
-Write-Host ("houseCARL-Setup.exe: {0:N2} MB" -f ((Get-Item $SetupExe).Length / 1MB))
+if ($OnWindows) {
+  # -p:Version stamps the plugin.json version into the exe, which the setup banner reads back off its own
+  # assembly (one version home; an unstamped dev build says 0.0.0-dev), exactly as step 2 does for the server.
+  dotnet publish $SetupProj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -p:Version=$Version -p:DebugType=None -p:DebugSymbols=false -o $PkgRoot
+  if ($LASTEXITCODE -ne 0) { throw "setup-utility publish failed (exit $LASTEXITCODE)" }
+  if (-not (Test-Path $SetupExe)) { throw "setup utility not produced at $SetupExe" }
+  Write-Host ("houseCARL-Setup.exe: {0:N2} MB" -f ((Get-Item $SetupExe).Length / 1MB))
+} else { Write-Host "skipped: no setup utility for $Runtime" }
 
 # ---- 10. leak-check the server half + the whole package root ----------------
 # The skill trees were leak-checked at step 7 (excluded files + markdown pointers); this covers what
@@ -288,6 +308,7 @@ if ($leaks.Count -gt 0) {
 # package root (dist/) so START-HERE.txt + marketplace.json are covered too, not just dist/housecarl.
 # \\+ matches one-or-more backslashes, so it catches both the single-backslash (md/txt) and double-backslash (json) forms of a Windows user path.
 $devPathPatterns = @('C:\\+Users\\+[^\\''/]+', '[A-Z]:\\+Steam')
+if ([Environment]::OSVersion.Platform -eq 'Unix') { $devPathPatterns += [regex]::Escape([Environment]::GetFolderPath('UserProfile')) + '/' }   # the builder's own home off Windows ($IsWindows is not in PowerShell 5.1)
 $pathLeaks = @()
 foreach ($tf in (Get-ChildItem $PkgRoot -Recurse -Force -File -Include *.json,*.jsonl,*.md,*.txt,*.yml,*.yaml)) {
   $content = Get-Content $tf.FullName -Raw -ErrorAction SilentlyContinue
@@ -308,7 +329,7 @@ Write-Host "leak-check clean." -ForegroundColor Green
 # never includes itself. FileMode::Create overwrites a same-version zip in place.
 Step '11/12' 'Pack release zip'
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
-$ZipPath = Join-Path $ReleaseDir ("houseCARL-{0}.zip" -f $Version)
+$ZipPath = Join-Path $ReleaseDir $(if ($OnWindows) { "houseCARL-$Version.zip" } else { "houseCARL-$Version-$Runtime.zip" })
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $fs = [System.IO.File]::Open($ZipPath, [System.IO.FileMode]::Create)
@@ -316,7 +337,7 @@ try {
   $zipArchive = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create)
   try {
     foreach ($f in (Get-ChildItem $PkgRoot -Recurse -File -Force)) {
-      $rel = $f.FullName.Substring($PkgRoot.Length).TrimStart('\')
+      $rel = $f.FullName.Substring($PkgRoot.Length).TrimStart('\', '/')
       $entryName = 'houseCARL/' + ($rel -replace '\\','/')
       [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zipArchive, $f.FullName, $entryName, [System.IO.Compression.CompressionLevel]::Optimal) | Out-Null
     }
@@ -338,11 +359,11 @@ Write-Host ("Assembled plugin: {0}" -f $DistRoot)
 Write-Host ("  files: {0}   size: {1:N1} MB   skills: {2}" -f $fileCount, $totalMB, $skillCount)
 Write-Host ("  exe:         {0}" -f (Test-Path $Exe))
 Write-Host ("  corpus:      {0}" -f (Test-Path (Join-Path $ServerDir 'corpus.json')))
-Write-Host ("  manifest:    {0}" -f (Test-Path (Join-Path $DistRoot '.claude-plugin\plugin.json')))
-Write-Host ("  setup util:  {0}   ({1})" -f (Test-Path $SetupExe), (Split-Path $SetupExe -Leaf))
+Write-Host ("  manifest:    {0}" -f (Test-Path (Join-Path $DistRoot '.claude-plugin/plugin.json')))
+Write-Host ("  setup util:  {0}   ({1})" -f (Test-Path $SetupExe), $(if ($OnWindows) { Split-Path $SetupExe -Leaf } else { "none for $Runtime" }))
 Write-Host ("  start-here:  {0}" -f (Test-Path (Join-Path $PkgRoot 'START-HERE.txt')))
-Write-Host ("  marketplace: {0}" -f (Test-Path (Join-Path $PkgRoot '.claude-plugin\marketplace.json')))
-Write-Host ("  codex skill: {0}" -f (Test-Path (Join-Path $CodexSkills 'housecarl\SKILL.md')))
+Write-Host ("  marketplace: {0}" -f (Test-Path (Join-Path $PkgRoot '.claude-plugin/marketplace.json')))
+Write-Host ("  codex skill: {0}" -f (Test-Path (Join-Path $CodexSkills 'housecarl/SKILL.md')))
 Write-Host ("Shippable zip:    {0}  ({1} MB, {2} entries)" -f $ZipPath, $ZipMB, $ZipEntryCount)
 Write-Host "`nDONE." -ForegroundColor Green
 Write-Host "Next - validation gate (necessary, not sufficient):" -ForegroundColor Yellow

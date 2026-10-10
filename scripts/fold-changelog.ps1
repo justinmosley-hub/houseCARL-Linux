@@ -26,8 +26,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot  = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$Changelog = Join-Path $RepoRoot 'plugin\CHANGELOG.md'
-$FragDir   = Join-Path $RepoRoot 'plugin\changelog.d'
+$Changelog = Join-Path $RepoRoot 'plugin/CHANGELOG.md'
+$FragDir   = Join-Path $RepoRoot 'plugin/changelog.d'
 $Crlf      = "`r`n"
 
 $unreleased = $Version -ceq 'Unreleased'

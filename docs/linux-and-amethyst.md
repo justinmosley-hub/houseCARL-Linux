@@ -18,6 +18,7 @@ run against a real Amethyst 2.5.3 Skyrim SE install. Writing into Amethyst and P
 | `IManagerInstance`, `AmethystInstance`; the setup tool takes an MO2 or Amethyst folder; `ReadComposition` takes the mods and Data folders and the manager's `PartialLoadOrder` | houseCARL reads Amethyst as it reads MO2; Amethyst's `loadorder.txt` can be partial, so its order is completed the way the game loads | [`architecture/amethyst-instance.md`](architecture/amethyst-instance.md), [ADR 0007](decisions/0007-amethyst-is-read-from-its-files.md) |
 | json written with `\n` on every OS (`JsonWire.Opts`) | .NET indents with the OS line break by default, so Windows and Linux returned different documents | [`architecture/json-wire.md`](architecture/json-wire.md) "One document, whatever the OS" |
 | json caveats and asset rows measured before they are written | The item that crossed `max_chars` was written whole; it showed on Linux because line-break width moved where items end | [`architecture/json-wire.md`](architecture/json-wire.md), `AssetSelectTests.NoCaveatOrRowPastTheFirstCrossesTheCeilingAtAnyCap` |
+| `build-plugin.ps1 -Runtime linux-x64`; `packaging/START-HERE-linux.txt`; the plugin's folder prompt names Amethyst | A Linux package from the same build script, installed through Claude Code's plugin commands | *Building and testing on Linux* below |
 | `WindowsTool` in core starts the Papyrus compiler and BSArch | They are Windows programs: on Linux they run through Wine, handed paths on its `Z:` drive | *Windows tools through Wine* below, [ADR 0008](decisions/0008-windows-tools-run-through-wine.md) |
 | Every text and json write render bounded by `max_chars` (`BatchRender.AppendSections`, `RowRoom`) | Not a Linux issue: #1016's three text renders and the six json write renders answered past their cap whenever they cut | [`architecture/render-budget.md`](architecture/render-budget.md) |
 
@@ -110,6 +111,22 @@ dotnet test src/housecarl-mcp-tests -c Release --no-build
 
 The server is an ASP.NET app, and Arch ships the ASP.NET runtime as its own package; without it every
 test that starts the server aborts with "framework Microsoft.AspNetCore.App not found".
+
+**The Linux package** comes from upstream's own `scripts/build-plugin.ps1`, run with PowerShell 7 and `-Runtime
+linux-x64` (`pwsh` is preinstalled on GitHub's Linux runners; locally, a distribution package or
+`dotnet tool install PowerShell --version 7.5.4 --tool-path <dir>`):
+
+```
+pwsh scripts/build-plugin.ps1 -Runtime linux-x64
+claude plugin validate dist/housecarl --strict
+```
+
+It runs the same twelve steps as the Windows build, with four differences: the server is published for Linux and
+`.mcp.json` launches `housecarl-mcp` (no `.exe`); the START-HERE note is `packaging/START-HERE-linux.txt`, which installs
+through `claude plugin marketplace add` / `claude plugin install`; there is no setup utility (it writes the Windows
+desktop app's config); and the zip is `release/houseCARL-<ver>-linux-x64.zip`. The path leak-check also refuses the
+builder's own home folder. The script's paths are written with `/`, which Windows PowerShell reads too, so the
+Windows build is unchanged. The zip keeps the server's executable mark (checked by unzipping it).
 
 A test that cannot run on one OS is marked so it reports as **skipped**, never as passed: `[WindowsFact("what Linux
 lacks")]` for Windows-only behaviour, `[CaseSensitiveDiskFact]` for one that needs a case-sensitive disk. Never `return`

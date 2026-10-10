@@ -90,7 +90,7 @@ $target = Get-Prop $deps.targets $targetName
 # Ask the toolchain rather than guessing: a nuget.config globalPackagesFolder moves it off the default path.
 $NugetCache = ((dotnet nuget locals global-packages --list) | Where-Object { $_ -match 'global-packages:' } | Select-Object -First 1) -replace '^.*global-packages:\s*', ''
 if (-not $NugetCache -or -not (Test-Path $NugetCache)) { $NugetCache = $env:NUGET_PACKAGES }
-if (-not $NugetCache) { $NugetCache = Join-Path $env:USERPROFILE '.nuget/packages' }
+if (-not $NugetCache) { $NugetCache = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.nuget/packages' }   # USERPROFILE is Windows-only
 if (-not (Test-Path $NugetCache)) { throw "NuGet package cache not found at $NugetCache; set NUGET_PACKAGES" }
 
 function Get-NuspecFacts($id, $version) {

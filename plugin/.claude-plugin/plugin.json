@@ -13,8 +13,8 @@
   "userConfig": {
     "mo2_instance_dir": {
       "type": "directory",
-      "title": "MO2 instance folder",
-      "description": "The folder containing ModOrganizer.ini for your modlist (houseCARL derives everything from this).",
+      "title": "Mod manager folder",
+      "description": "The folder containing ModOrganizer.ini for your modlist, or for Amethyst Mod Manager on Linux the game's mod folder (default ~/Games/Amethyst/Skyrim Special Edition). houseCARL derives everything from this.",
       "required": true
     }
   }

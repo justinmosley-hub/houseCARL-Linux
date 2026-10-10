@@ -1,0 +1,96 @@
+========================================================================
+ houseCARL  v{{VERSION}}  for Linux  --  START HERE
+========================================================================
+
+houseCARL gives Claude direct, plain-English access to your Skyrim SE
+load order: read any record, author patches, build SkyPatcher / SPID
+files, and look up record schemas and Papyrus signatures. Your original
+plugins are NEVER touched -- every change goes into a new mod that you
+review and enable yourself.
+
+This is the Linux build of the houseCARL-Linux fork. It reads a Mod
+Organizer 2 instance or an Amethyst Mod Manager game.
+
+
+INSTALL  (Claude Code, in a terminal)
+------------------------------------------------------------------------
+
+  1.  Unzip this package somewhere it can stay, for example
+          ~/Apps/houseCARL
+
+  2.  Add it to Claude Code and install the plugin:
+
+          claude plugin marketplace add ~/Apps/houseCARL
+          claude plugin install housecarl@housecarl-local
+
+      Claude Code asks for your mod manager folder (set or change it
+      later with  claude plugin configure housecarl@housecarl-local ,
+      or just tell houseCARL in a session). Give it:
+        - Amethyst:  the game's mod folder, by default
+                         ~/Games/Amethyst/Skyrim Special Edition
+                     (the folder holding profiles/ and mods/)
+        - MO2:       the folder that contains ModOrganizer.ini
+
+  3.  Restart Claude Code (quit and run `claude` again). Claude only
+      picks up houseCARL after a restart.
+
+  4.  Try it:
+
+          "what does my Skyrim load order look like?"
+          "make a patch that gives every iron weapon +5 damage"
+          "which plugins override the IronSword record, and who wins?"
+
+  With Amethyst, a new patch shows at the top of Amethyst's mod list,
+  switched off, once Amethyst refreshes: enable it, then Deploy. The
+  game sees a new mod only after a Deploy.
+
+
+COMPILING PAPYRUS SCRIPTS  (optional)
+------------------------------------------------------------------------
+  houseCARL runs the Creation Kit's compiler through Steam's Proton,
+  which it finds by itself -- no Wine setup. You need the compiler and
+  the vanilla script sources:
+
+  1.  Install "Skyrim Special Edition: Creation Kit" from Steam into
+      your Skyrim folder. If Amethyst has mods deployed, Restore first,
+      then Deploy again after the install.
+  2.  The Creation Kit's first launch unpacks Data/Scripts.zip and often
+      crashes under Proton. You do not need it to launch: unpack
+      Scripts.zip into the game's Data folder yourself (it holds
+      Source/Scripts/...).
+  3.  Ask Claude to compile a script; when houseCARL asks, give it the
+      path to  <Skyrim Special Edition>/Papyrus Compiler/PapyrusCompiler.exe
+
+  houseCARL runs the compiler in its own Wine prefix,
+  ~/.local/share/houseCARL/wineprefix -- never your game's.
+
+
+UPDATING AND REMOVING
+------------------------------------------------------------------------
+  Update:  unzip the new version over the old folder, then
+               claude plugin marketplace update housecarl-local
+               claude plugin update housecarl@housecarl-local
+           and restart Claude Code.
+  Remove:  claude plugin uninstall housecarl@housecarl-local
+           The patches houseCARL wrote live in your mods folder and are
+           left alone.
+
+
+REQUIREMENTS
+------------------------------------------------------------------------
+  - Linux (x64).
+  - .NET 9: the .NET Runtime 9.0 and the ASP.NET Core Runtime 9.0
+    (your distribution's packages, e.g. dotnet-runtime-9.0 and
+    aspnet-runtime-9.0, or https://dotnet.microsoft.com/download).
+  - Claude Code (the `claude` terminal CLI).
+  - Skyrim Special Edition on Steam, with Amethyst Mod Manager or Mod
+    Organizer 2. Neither needs to be running.
+
+
+WHAT'S IN HERE
+------------------------------------------------------------------------
+  housecarl/            the plugin itself (server + skills + rulebook)
+  housecarl/README.md   full README, more usage examples, and credits
+  housecarl/LICENSE     GPL-3.0-only  (+ THIRD-PARTY-NOTICES.txt)
+
+========================================================================
