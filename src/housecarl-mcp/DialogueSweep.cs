@@ -91,19 +91,64 @@ internal static class DialogueSweep
     }
 
     /// <summary>Every finding one report carries, counted off the report rather than off what rendered.</summary>
-    static int Problems(DialogueValidationReport r)
+    static int Problems(DialogueValidationReport r) => Findings(r).Count();
+
+    /// <summary>One dialogue finding in the artifact's row shape; <see cref="Findings"/> is the only list of them.
+    /// Its detail and script are read off <paramref name="Source"/> on demand, so counting formats nothing.</summary>
+    internal readonly record struct Finding(string Class, string? Plugin, FormKey Record, string? EditorId,
+                                            string? RecordType, string? Target, object Source)
     {
+        internal string Detail => Source switch
+        {
+            DialogueIssue i => i.Message,
+            SeqLintFinding s => DialogueWire.SeqVerdict(s),
+            VoiceLine l => DialogueWire.SilentVerdict(l),
+            ScriptBindingFinding f => f.Detail,
+            _ => (string)Source,
+        };
+
+        /// <summary>The script class whose .pex <see cref="Target"/> names, mapped back from <c>Scripts\A\B.pex</c>.</summary>
+        internal string? Script => Source is ScriptBindingFinding && Target is { Length: > 12 } pex
+            ? pex[8..^4].Replace('\\', ':').Replace('/', ':')
+            : null;
+    }
+
+    /// <summary>Every finding one report carries, in report order: the count and the <c>to_file=</c> rows both read
+    /// this. An INFO row's plugin and EditorID are null: the report carries only its topic's.</summary>
+    internal static IEnumerable<Finding> Findings(DialogueValidationReport r)
+    {
+        foreach (var i in r.InputIssues)
+            yield return new(Severity(i), r.InputWinnerPlugin, r.Input, r.InputEditorId, InputSignature(r.InputKind), null, i);
         // The coverage gaps count too: "0 findings" over a report that lost a plugin reads as a clean pass.
-        int n = r.InputIssues.Count + r.ScanGaps.Count;
-        if (r.SeqLint is { QuestIsSge: true } s && !(s.SeqExists && s.SeqContainsQuest == true && s.SeqNewerThanPlugin == true))
-            n++;
+        foreach (var gap in r.ScanGaps)
+            yield return new("scan_error", r.InputWinnerPlugin, r.Input, r.InputEditorId, InputSignature(r.InputKind), null, gap);
+        if (DialogueWire.SeqIsFinding(r.SeqLint))
+        {
+            string seqPlugin = DialogueWire.SeqPlugin(r.SeqLint!);
+            yield return new("seq_unconfirmed", seqPlugin, r.Input, r.InputEditorId, "QUST", "SEQ/" + seqPlugin + ".seq", r.SeqLint!);
+        }
         foreach (var t in r.Topics)
         {
-            n += t.Issues.Count;
-            n += t.VoiceLines.Count(l => !l.FuzPresent);
-            n += t.ScriptFindings.Count(f => f.Status is ScriptBindingStatus.ScriptNotCompiled
-                                                      or ScriptBindingStatus.BindingIncomplete);
+            foreach (var i in t.Issues)
+                yield return new(Severity(i), t.WinnerPlugin, t.Topic, t.TopicEditorId, "DIAL", null, i);
+            foreach (var l in t.VoiceLines.Where(l => !l.FuzPresent))
+                yield return new("silent_line", null, l.Info, null, "INFO", l.FuzPath, l);
+            foreach (var f in t.ScriptFindings)
+            {
+                if (f.Status == ScriptBindingStatus.BindingIncomplete)
+                    yield return new("binding_incomplete", null, f.Info, null, "INFO", null, f);
+                // One row per missing .pex, so each row names one file and one script.
+                else if (f.Status == ScriptBindingStatus.ScriptNotCompiled)
+                    foreach (var pex in f.MissingPex)
+                        yield return new("script_not_compiled", null, f.Info, null, "INFO", pex, f);
+            }
         }
-        return n;
     }
+
+    static string Severity(DialogueIssue i) => i.Severity.ToString().ToLowerInvariant();
+
+    static string? InputSignature(string kind) => kind switch
+    {
+        "quest" => "QUST", "topic" => "DIAL", "view" => "DLVW", "branch" => "DLBR", _ => null,
+    };
 }

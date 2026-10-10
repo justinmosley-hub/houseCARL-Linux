@@ -34,7 +34,7 @@ internal static class BodyPrefetch
             plugins[fk] = plugin;
         }
         Interlocked.Add(ref counters.KeysWanted, plugins.Count);     // what this caller asked for, whether or not a row reads it
-        return new Chunk(gather, plugins);
+        return new Chunk(gather, plugins, view, session, ct);
     }
 
     /// <summary>One chunk's bodies, each source plugin enumerated once and only when a row asks for it.</summary>
@@ -42,9 +42,33 @@ internal static class BodyPrefetch
     {
         readonly BodyGather _gather;
         readonly Dictionary<FormKey, string> _plugins;
+        readonly LoadOrderResolver.IndexView _view;
+        readonly LoadOrderResolver.OverlaySession _session;
+        readonly CancellationToken _ct;
+        // The rows' containing records, one gather per child type that hopped, and the plugins each could not walk.
+        readonly Dictionary<Type, (Dictionary<FormKey, IMajorRecordGetter> Bodies, Dictionary<string, PluginUnreadableException> Faults)> _parents = new();
 
-        internal Chunk(BodyGather gather, Dictionary<FormKey, string> plugins)
-        { _gather = gather; _plugins = plugins; }
+        internal Chunk(BodyGather gather, Dictionary<FormKey, string> plugins,
+                       LoadOrderResolver.IndexView view, LoadOrderResolver.OverlaySession session, CancellationToken ct)
+        { _gather = gather; _plugins = plugins; _view = view; _session = session; _ct = ct; }
+
+        /// <summary>A row's containing record, gathered for every row on the first hop its child type takes (#1147); null fetches it alone.</summary>
+        internal IMajorRecordGetter? Parent(IMajorRecordGetter child, FormKey parent)
+        {
+            if (!_plugins.ContainsKey(child.FormKey)) return null;   // a hop above the chunk's own rows
+            if (!_parents.ContainsKey(child.GetType()))
+            {
+                var wanted = _plugins.Keys.Select(fk => _view.ParentOf(fk)).OfType<FormKey>().Select(pk => (pk, child.GetType(), 1));
+                _parents[child.GetType()] = (ContainmentIndex.GatherContainers(_view, _session, wanted, out var faults, _ct), faults);
+            }
+            foreach (var (bodies, _) in _parents.Values)
+                if (bodies.TryGetValue(parent, out var body)) return body;
+            // A winner the gather could not walk answers with that fault, never a second open per row.
+            if (_view.ResolveWinner(parent) is { } w)
+                foreach (var (_, faults) in _parents.Values)
+                    if (faults.TryGetValue(w.WinnerPlugin, out var fault)) throw fault;
+            return null;
+        }
 
         /// <summary>This row's body, walking its source plugin once for the whole chunk. A body that is not gathered
         /// comes back null and the row's own read raises the fault it always did; an

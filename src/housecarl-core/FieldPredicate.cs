@@ -56,6 +56,12 @@ public sealed class FieldPredicateSet
     Func<FormKey, IMajorRecordGetter?>? _fetchWinnerBody;
     // The `*parent` containment step's child->parent lookup.
     Func<FormKey, FormKey?>? _parentOf;
+    // The containing records' bodies, gathered many at once; each key carries the child type it was climbed from and how many hops up.
+    Func<IReadOnlyCollection<(FormKey Parent, Type ChildType, int Hops)>, IReadOnlyDictionary<FormKey, IMajorRecordGetter>>? _fetchParents;
+    // One chunk's containing records, held only until the caller releases the chunk (#1147, #720).
+    IReadOnlyDictionary<FormKey, IMajorRecordGetter>? _heldParents;
+    // The keys that chunk asked for: one absent from the gather is the answer, not a reason to seek it again.
+    HashSet<FormKey>? _heldAsked;
     // Link-step targets cached for the set's lifetime; the '*parent' hop deliberately does not share it (#720).
     readonly Dictionary<FormKey, IMajorRecordGetter?> _targetCache = new();
 
@@ -97,13 +103,47 @@ public sealed class FieldPredicateSet
         : p.ParentHops == 0 && p.Pseudo == PseudoPath.None);           // the own path's leaf walk is read on the candidate
 
     /// <summary>Bind the scan's resolution context, from the same captured view the scan answers from.</summary>
+    /// <param name="fetchParents">The bulk fetch of a chunk's containing records; any other parent is read through <paramref name="fetchWinnerBody"/>.</param>
     public void BindResolution(Func<FormKey, string?> winnerOf, Func<FormKey, IMajorRecordGetter?>? fetchWinnerBody = null,
-                               Func<FormKey, FormKey?>? parentOf = null)
+                               Func<FormKey, FormKey?>? parentOf = null,
+                               Func<IReadOnlyCollection<(FormKey Parent, Type ChildType, int Hops)>, IReadOnlyDictionary<FormKey, IMajorRecordGetter>>? fetchParents = null)
     {
         _winnerOf = winnerOf;
         _fetchWinnerBody = fetchWinnerBody;
         _parentOf = parentOf;
+        _fetchParents = fetchParents;
     }
+
+    /// <summary>Gather in one bulk fetch the containing records of <paramref name="chunk"/> with no memoized verdict, held until <see cref="ReleaseParents"/>.</summary>
+    public void HoldParents(IEnumerable<IMajorRecordGetter> chunk)
+    {
+        ReleaseParents();
+        if (_fetchParents is null || _parentOf is null || !NeedsContainment) return;
+        var want = new Dictionary<FormKey, (FormKey Parent, Type ChildType, int Hops)>();
+        foreach (var child in chunk)
+            for (int k = 0; k < _predicates.Count; k++)
+            {
+                var p = _predicates[k];
+                // The candidate's own side only: a hop on a link TARGET is read when that target is reached.
+                bool linkSide = p.LinkPath is not null;
+                int hops = linkSide ? p.LinkParentHops : p.ParentHops;
+                if (hops == 0) continue;
+                var at = child.FormKey;
+                int climbed = 0;
+                while (climbed < hops && _parentOf(at) is { } up) { at = up; climbed++; }
+                if (climbed == 0 || want.ContainsKey(at)) continue;
+                // A chain that dead-ends above its first hop reads the record it stopped on, for the rollup sentence.
+                if (climbed == hops ? _parentVerdicts.ContainsKey((k, linkSide, at)) : _noParentTypes.ContainsKey(at)) continue;
+                want[at] = (at, child.GetType(), climbed);
+            }
+        if (want.Count == 0) return;
+        ParentBodyFetches += want.Count;
+        _heldAsked = new HashSet<FormKey>(want.Keys);
+        _heldParents = _fetchParents(want.Values);
+    }
+
+    /// <summary>Drop the chunk's containing records; the verdicts they decided stay memoized.</summary>
+    public void ReleaseParents() { _heldParents = null; _heldAsked = null; }
 
     FieldPredicateSet(IReadOnlyList<Predicate> predicates)
     {
@@ -1083,6 +1123,7 @@ public sealed class FieldPredicateSet
     /// <summary>The hop's one body read, counted where it happens so every path pays into the same counter.</summary>
     IMajorRecordGetter? FetchParentBody(FormKey key)
     {
+        if (_heldAsked is not null && _heldAsked.Contains(key)) return _heldParents!.GetValueOrDefault(key);
         ParentBodyFetches++;
         return _fetchWinnerBody!(key);
     }

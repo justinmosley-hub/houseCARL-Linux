@@ -45,18 +45,32 @@ Adding a **new** line re-lists nothing and needs no PNAM for the lines around it
 
 Two cases the recipe does not cover. If the target is already at position 1 there is no line above it to name —
 and writing no PNAM does not leave it there. Absent is the tail arm: the re-listed line goes to the **bottom**,
-and every line that was beneath it now answers first. The only shape that holds a line at the head is the
-present-zero PNAM above, and houseCARL cannot write one — Mutagen's writer emits no subrecord for a null link, so
-a `PreviousDialog` you set to null reaches disk absent. Either leave the position-1 line alone, or re-list the
-run beneath it in the same call, each of those lines carrying the FormID of the line above it: the merge places
-them back in front of the line that fell to the bottom and the original sequence is restored. And because
-`info_order` merges every plugin touching the topic, the line at position minus one can be one defined by a plugin
-your patch does not master. That does not dangle: the patch lane is handed the whole load order and Mutagen
-derives the master list from the records' own FormLinks, so writing that FormID **adds that plugin as a master**
-of your patch — a new hard dependency, one more plugin your patch requires and must load after. Decide whether
-you want it before you write the link; if you do not, name a line from a plugin you already master and accept the
-position it gives you. (A PNAM that truly resolves to nothing — a target no active plugin defines — places the
-line at the HEAD, not the bottom.)
+and every line that was beneath it now answers first. The shape that holds a line at the head is the present-zero
+PNAM above, and the two shapes are two different writes: `Set` `PreviousDialog` to `"0"` writes the present zero
+(pinned first), and `Remove` on `PreviousDialog` leaves the subrecord out (the bottom). Each reads back as above,
+in the apply echo and in a record read (#1144; through 2.0.4 `Remove` also wrote the present zero, so a patch that
+used it to send lines to the bottom pinned them first instead: re-run the call with `into=` that patch, which
+fixes it in place, where a plain re-run writes a new `<name>_001.esp` beside the bad one). Either `Set` the
+position-1 line's PNAM to `"0"`, or re-list the run beneath it in the same call, each of those lines carrying the
+FormID of the line above it: the merge places them back in front of the line that fell to the bottom and the
+original sequence is restored. And because `info_order` merges every plugin touching the topic, the line at
+position minus one can be one defined by a plugin your patch does not master. That does not dangle: the patch lane
+is handed the whole load order and Mutagen derives the master list from the records' own FormLinks, so writing
+that FormID **adds that plugin as a master** of your patch — a new hard dependency, one more plugin your patch
+requires and must load after. Decide whether you want it before you write the link; if you do not, name a line
+from a plugin you already master and accept the position it gives you. (A PNAM that truly resolves to nothing — a
+target no active plugin defines — places the line at the HEAD, not the bottom.)
+
+## A topic only one plugin touches: PNAM against file order
+
+Nothing merges on a topic one plugin touches, but that plugin's own PNAM links still place its lines, and a line
+whose PNAM names a line other than the one above it in the file lands somewhere else. When every line stays where
+the file puts it, `info_order` says so in one line: the effective order is that plugin's own list. On a topic past
+400 lines that one line says instead that the PNAM order was not compared with the file order. When one does
+not, it lists the order with PNAM applied, marks each line that changed relative order `MOVED from #N` with its
+file position, and says that which order the game follows within one plugin is **untested**: houseCARL applies
+PNAM there because the merge applies it everywhere else and xEdit's INFO order does the same, not because it was
+measured in game. If such a line matters, check it in game before relying on either order.
 
 ## The bookkeeping create fills, and the flags they do not decide
 

@@ -15,7 +15,7 @@ internal sealed class ScanDetailReader : IDisposable
     readonly int _depth;
     readonly bool _resolveNames, _winnerFields;
     readonly string? _containerHint;
-    readonly IReadOnlyList<int>? _depths;
+    readonly IReadOnlyList<(int Depth, string[]? Tail)>? _depths;
     readonly CancellationToken _ct;
     readonly RecordReads.LinkMemo? _linkMemo;
     readonly LoadOrderResolver.IndexView? _view;
@@ -26,7 +26,7 @@ internal sealed class ScanDetailReader : IDisposable
 
     internal ScanDetailReader(LoadOrderService svc, CrossQueryOutcome q, IReadOnlyList<string>? fields, int depth,
                               bool resolveNames, bool winnerFields, string? containerHint,
-                              IReadOnlyList<int>? depths, CancellationToken ct)
+                              IReadOnlyList<(int Depth, string[]? Tail)>? depths, CancellationToken ct)
     {
         _svc = svc; _q = q; _fields = fields; _depth = depth;
         _resolveNames = resolveNames; _winnerFields = winnerFields;
@@ -49,7 +49,7 @@ internal sealed class ScanDetailReader : IDisposable
         FillChunk(i);
         var body = _chunk?.Body(fk);   // the plugin is walked here, on the first row of the chunk that wants it
         return _svc.ResolveReadOn(_q, fk, plugin, _fields, false, _depth, _resolveNames, _linkMemo,
-                                  _containerHint, _depths, _session, body);
+                                  _containerHint, _depths, _session, body, heldParent: _chunk is null ? null : _chunk.Parent);
     }
 
     /// <summary>The plugin whose body this row displays: the scan's own per-match source, or the winner when the
