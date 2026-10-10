@@ -6,8 +6,11 @@
 # One attempt per break: if the branch's newest commit is already Claude's, it stops and asks for a person.
 # Needs the repository secret CLAUDE_CODE_OAUTH_TOKEN (made with `claude setup-token`); without it, it does nothing.
 #
-# Trust: this runs Claude, with the repository's write token, over code merged from Avick3110/houseCARL. Only use it
-# while that upstream, and everyone with write access here, is trusted.
+# Trust: Claude works over code merged from Avick3110/houseCARL, so anything in that code (a comment, a test name, a
+# doc) is input it reads. To keep that from reaching the repository unreviewed, Claude runs in a job whose token can
+# only READ the repository: it commits locally, and a second job with no Claude in it pushes those commits, to
+# sync/upstream only, and only if the branch has not moved meanwhile. Claude's tools are limited to editing files and
+# running dotnet, git and read-only gh. The action is pinned to a commit so a new release cannot change what runs.
 name: Sync fix
 
 on:
@@ -15,12 +18,7 @@ on:
     workflows: ["CI", "Upstream sync"]
     types: [completed]
 
-permissions:
-  contents: write        # push the fix
-  pull-requests: write   # turn off auto-merge, open the pull request, comment
-  actions: write         # read the failed run, start CI again
-  issues: write          # comment on the conflict issue
-  id-token: write        # the action asks for it
+permissions: {}   # each job asks for what it needs
 
 concurrency:
   group: sync-fix
@@ -34,7 +32,7 @@ env:
   BOT_EMAIL: claude[bot]@users.noreply.github.com
 
 jobs:
-  # CI went red on the sync branch.
+  # CI went red on the sync branch: Claude fixes it, with a read-only token.
   fix-ci:
     name: fix a red sync
     if: >-
@@ -42,6 +40,15 @@ jobs:
       github.event.workflow_run.conclusion == 'failure' &&
       github.event.workflow_run.head_branch == 'sync/upstream'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read         # read the code; the push job writes
+      actions: read          # read the failed run's log
+      pull-requests: write   # turn off auto-merge, comment
+      id-token: write        # the action asks for it
+    outputs:
+      go: ${{ steps.guard.outputs.go }}
+      before: ${{ steps.guard.outputs.before }}
+      changed: ${{ steps.bundle.outputs.changed }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -83,7 +90,7 @@ jobs:
 
       - name: Fix it with Claude
         if: steps.guard.outputs.go == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc   # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
@@ -98,32 +105,89 @@ jobs:
             - Keep upstream's change and the fork's reason for its own. Never change behaviour for Mod Organizer 2.
             - Never delete, skip or weaken a test to make it pass; fix the code or the fixture the test exposes.
             - Build and test with `dotnet build housecarl.sln -c Release` and
-              `dotnet test src/housecarl-mcp-tests -c Release --no-build`. This runner is Linux, so Windows-only tests
-              skip here; reason about a Windows failure from the log.
-            - Commit small, with plain messages, and push to sync/upstream with `git push origin sync/upstream`.
+              `dotnet test src/housecarl-mcp-tests -c Release --no-build`, the same commands CI runs on the same kind
+              of Linux runner. Tests that need Wine, Steam or the Creation Kit skip here, as they do in CI.
+            - Commit small, with plain messages, on this branch. Do not push; the workflow pushes when you are done.
             - If you cannot fix it with confidence, commit nothing and say why in your final message.
           claude_args: >-
             --max-turns 80
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(dotnet:*),Bash(git:*),Bash(gh run view:*),Bash(gh pr view:*)"
 
-      - name: Run CI again on the fix, or ask for a person
+      # Everything Claude committed, as a bundle the push job can fetch from; nothing when it committed nothing.
+      - name: Bundle the fix
+        id: bundle
         if: steps.guard.outputs.go == 'true' && always()
         run: |
-          git fetch -q origin "$SYNC"
-          if [ "$(git rev-parse "origin/$SYNC")" != "${{ steps.guard.outputs.before }}" ]; then
-            gh pr comment "$SYNC" --body "Claude pushed a fix for the red CI run (${{ github.event.workflow_run.html_url }}). CI is running again; auto-merge is off, so review and merge it yourself."
-            gh workflow run CI --ref "$SYNC"
-          else
-            gh pr comment "$SYNC" --body "Claude did not push a fix for the red CI run (${{ github.event.workflow_run.html_url }}); see this workflow's log for why. This needs a person."
-          fi
+          if [ "$(git rev-parse HEAD)" = "${{ steps.guard.outputs.before }}" ]; then echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git bundle create "$RUNNER_TEMP/fix.bundle" "${{ steps.guard.outputs.before }}..HEAD"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
 
-  # The sync's merge conflicted (the sync workflow failed): resolve the merge.
+      - name: Hand the fix to the push job
+        if: steps.bundle.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: sync-fix
+          path: ${{ runner.temp }}/fix.bundle
+          retention-days: 1
+
+  # Pushes what Claude committed, to sync/upstream only, if the branch has not moved; no Claude in this job.
+  push-ci-fix:
+    name: push the fix, or ask for a person
+    needs: fix-ci
+    if: ${{ !cancelled() && needs.fix-ci.outputs.go == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push the fix
+      pull-requests: write   # comment
+      actions: write         # start CI again
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BEFORE: ${{ needs.fix-ci.outputs.before }}
+    steps:
+      - name: Check out the sync branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SYNC }}
+          fetch-depth: 0
+
+      - name: Take the fix from the Claude job
+        if: needs.fix-ci.outputs.changed == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: sync-fix
+          path: ${{ runner.temp }}
+
+      - name: Push the fix and run CI again, or ask for a person
+        run: |
+          run="${{ github.event.workflow_run.html_url }}"
+          if [ "${{ needs.fix-ci.outputs.changed }}" != "true" ]; then
+            gh pr comment "$SYNC" --body "Claude did not push a fix for the red CI run ($run); see this workflow's log for why. This needs a person."
+            exit 0
+          fi
+          if [ "$(git rev-parse HEAD)" != "$BEFORE" ]; then
+            gh pr comment "$SYNC" --body "Claude made a fix for the red CI run ($run), but the branch moved while it worked, so nothing was pushed. This needs a person."
+            exit 1
+          fi
+          git fetch "$RUNNER_TEMP/fix.bundle" HEAD
+          git push origin "FETCH_HEAD:refs/heads/$SYNC"
+          gh pr comment "$SYNC" --body "Claude pushed a fix for the red CI run ($run). CI is running again; auto-merge is off, so review and merge it yourself."
+          gh workflow run CI --ref "$SYNC"
+
+  # The sync's merge conflicted (the sync workflow failed): Claude resolves the merge, with a read-only token.
   fix-conflict:
     name: resolve a conflicting sync
     if: >-
       github.event.workflow_run.name == 'Upstream sync' &&
       github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read         # read the code; the push job writes
+      pull-requests: write   # comment on a waiting pull request
+      id-token: write        # the action asks for it
+    outputs:
+      go: ${{ steps.merge.outputs.go }}
+      sha: ${{ steps.merge.outputs.sha }}
+      changed: ${{ steps.bundle.outputs.changed }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -174,7 +238,7 @@ jobs:
 
       - name: Resolve it with Claude
         if: steps.merge.outputs.go == 'true'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc   # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
@@ -192,25 +256,72 @@ jobs:
               change behaviour for Mod Organizer 2.
             - Never delete, skip or weaken a test.
             - Finish the merge with `git commit --no-edit`, then build and test with `dotnet build housecarl.sln -c Release`
-              and `dotnet test src/housecarl-mcp-tests -c Release --no-build`, fixing what the merge broke in small
-              further commits. This runner is Linux, so Windows-only tests skip here.
+              and `dotnet test src/housecarl-mcp-tests -c Release --no-build`, the same commands CI runs on the same
+              kind of Linux runner, fixing what the merge broke in small further commits. Tests that need Wine, Steam
+              or the Creation Kit skip here, as they do in CI.
             - Do not push; the workflow pushes the branch when you are done.
             - If you cannot resolve it with confidence, run `git merge --abort` and say why in your final message.
           claude_args: >-
             --max-turns 120
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(dotnet:*),Bash(git:*)"
 
-      - name: Open the pull request for review and run CI, or ask for a person
+      # The finished merge and what followed it, as a bundle the push job can fetch from; nothing when the merge
+      # was abandoned or never finished.
+      - name: Bundle the resolved merge
+        id: bundle
         if: steps.merge.outputs.go == 'true' && always()
-        env:
-          SHA: ${{ steps.merge.outputs.sha }}
+        run: |
+          if git rev-parse -q --verify MERGE_HEAD >/dev/null || ! git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git bundle create "$RUNNER_TEMP/fix.bundle" "origin/$BASE..HEAD"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Hand the merge to the push job
+        if: steps.bundle.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: sync-fix
+          path: ${{ runner.temp }}/fix.bundle
+          retention-days: 1
+
+  # Pushes the resolved merge to sync/upstream and opens its pull request for review; no Claude in this job.
+  push-conflict-fix:
+    name: open the resolved merge for review, or ask for a person
+    needs: fix-conflict
+    if: ${{ !cancelled() && needs.fix-conflict.outputs.go == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push the sync branch
+      pull-requests: write   # open the pull request, turn off auto-merge
+      actions: write         # start CI on it
+      issues: write          # comment on the conflict issue
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SHA: ${{ needs.fix-conflict.outputs.sha }}
+    steps:
+      - name: Check out the fork's working branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.BASE }}
+          fetch-depth: 0
+
+      - name: Take the merge from the Claude job
+        if: needs.fix-conflict.outputs.changed == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: sync-fix
+          path: ${{ runner.temp }}
+
+      - name: Open the pull request for review and run CI, or ask for a person
         run: |
           issue=$(gh issue list --state open --search "in:title Upstream sync conflicts" --json number --jq '.[0].number // empty')
-          if git rev-parse -q --verify MERGE_HEAD >/dev/null || ! git merge-base --is-ancestor upstream/main HEAD; then
+          if [ "${{ needs.fix-conflict.outputs.changed }}" != "true" ]; then
             [ -n "$issue" ] && gh issue comment "$issue" --body "Claude did not resolve the merge of upstream $SHA; see the Sync fix run's log for why. This needs a person."
             exit 0
           fi
-          git push --force origin "$SYNC"
+          git fetch "$RUNNER_TEMP/fix.bundle" HEAD
+          git push --force origin "FETCH_HEAD:refs/heads/$SYNC"
           title="Merge upstream main ($SHA), conflicts resolved by Claude"
           body="Claude resolved the conflicts merging upstream main ($SHA). Auto-merge is off: review the resolution and merge it yourself once CI passes. See docs/linux-and-amethyst.md, Keeping up with upstream."
           pr=$(gh pr list --head "$SYNC" --base "$BASE" --state open --json number --jq '.[0].number // empty')
