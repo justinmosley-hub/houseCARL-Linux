@@ -207,20 +207,29 @@ public sealed class LoadOrderResolver : IDisposable
     public sealed class OverlaySession : IDisposable
     {
         readonly LoadOrderResolver _r;
-        readonly Dictionary<int, ISkyrimModGetter> _open = new();
+        readonly Dictionary<int, OpenPlugin> _open = new();
         internal OverlaySession(LoadOrderResolver r) => _r = r;
+
+        /// <summary>One opened plugin: its overlay and the link cache built over it, if any, released together.</summary>
+        sealed class OpenPlugin(ISkyrimModGetter overlay)
+        {
+            public ISkyrimModGetter Overlay { get; } = overlay;
+            public ILinkCache? Cache;
+        }
 
         /// <summary>The counters of the resolver this session reads through.</summary>
         public CostCounters Counters => _r.Counters;
 
-        internal ISkyrimModGetter Overlay(int idx)
+        internal ISkyrimModGetter Overlay(int idx) => Opened(idx).Overlay;
+
+        OpenPlugin Opened(int idx)
         {
-            if (!_open.TryGetValue(idx, out var ov))
+            if (!_open.TryGetValue(idx, out var op))
             {
                 System.Threading.Interlocked.Increment(ref _r.Counters.SessionOverlayOpens);
-                _open[idx] = ov = OpenOverlay(_r._paths[idx], _r._dataDir);
+                _open[idx] = op = new OpenPlugin(OpenOverlay(_r._paths[idx], _r._dataDir));
             }
-            return ov;
+            return op;
         }
 
         /// <summary>Open EVERY plugin (priority order) as the FULL known-master set the multi-master write path hands the serializer; a write into an active patch uses <see cref="AllMastersExcept"/>.</summary>
@@ -278,16 +287,22 @@ public sealed class LoadOrderResolver : IDisposable
         public void ReleaseOverlay(string fileName)
         {
             var hits = _open.Keys.Where(i => string.Equals(_r._names[i], fileName, StringComparison.OrdinalIgnoreCase)).ToList();
-            foreach (var i in hits) { (_open[i] as IDisposable)?.Dispose(); _open.Remove(i); }
+            foreach (var i in hits) { (_open[i].Overlay as IDisposable)?.Dispose(); _open.Remove(i); }
         }
 
-        /// <summary>An immutable link cache over ONE named plugin in this session, for the write path's nested-parent reconstruction. Costly, never held past the session; null if not in the order.</summary>
+        /// <summary>An immutable link cache over ONE named plugin in this session, for the write path's nested-parent reconstruction. Built once per (session, plugin), dropped with its overlay, never held past the session; null if not in the order.</summary>
         public ILinkCache? LinkCacheFor(string pluginName)
-            => _r._nameToIdx.TryGetValue(pluginName, out int idx) ? Overlay(idx).ToImmutableLinkCache() : null;
+        {
+            if (!_r._nameToIdx.TryGetValue(pluginName, out int idx)) return null;
+            var op = Opened(idx);
+            if (op.Cache is not null) return op.Cache;
+            System.Threading.Interlocked.Increment(ref _r.Counters.LinkCacheBuilds);
+            return op.Cache = op.Overlay.ToImmutableLinkCache();
+        }
 
         public void Dispose()
         {
-            foreach (var ov in _open.Values) (ov as IDisposable)?.Dispose();
+            foreach (var op in _open.Values) (op.Overlay as IDisposable)?.Dispose();
             _open.Clear();
         }
     }
@@ -908,7 +923,12 @@ public sealed class LoadOrderResolver : IDisposable
         try { ov = session.Overlay(idx); }
         catch (Exception ex) { throw new PluginUnreadableException(_names[idx], ex); }
         System.Threading.Interlocked.Increment(ref Counters.CollectPasses);         // past here the plugin is actually walked
-        foreach (var (t, keys) in byType)
+        if (byType.Count > 1)
+            foreach (var shared in MutagenGroups.SharedGroups(byType.Keys))
+                CollectShared(ov, shared, byType, sink, flat);
+        foreach (var t in byType.Keys.Where(t => MutagenGroups.PropsOf(t) is not null).ToList())
+            CollectShared(ov, [t], byType, sink, flat);                   // a type alone in its groups reads them the same way, counted by one rule
+        foreach (var (t, keys) in byType)                                  // no group map (the base interface): Mutagen's own walk
         {
             int left = keys.Count;
             foreach (var rec in ov.EnumerateMajorRecords(t, throwIfUnknown: false))
@@ -919,6 +939,33 @@ public sealed class LoadOrderResolver : IDisposable
         int missing = flat.Count;
         foreach (var rec in ov.EnumerateMajorRecords())
             if (flat.Contains(rec.FormKey) && sink.TryAdd(rec.FormKey, rec) && --missing == 0) return;
+    }
+
+    /// <summary>Seek types that share groups (cells, worldspaces, the references in them) read each shared group once, with
+    /// one typed walk per type over that one copy, instead of one copy per type. Their misses join <paramref name="flat"/>.</summary>
+    void CollectShared(ISkyrimModGetter ov, List<Type> types, Dictionary<Type, HashSet<FormKey>> byType,
+                       IDictionary<FormKey, IMajorRecordGetter> sink, HashSet<FormKey> flat)
+    {
+        var left = types.ToDictionary(t => t, t => byType[t].Count);
+        var props = types.ToDictionary(t => t, t => MutagenGroups.PropsOf(t)!);
+        foreach (var prop in types.SelectMany(t => props[t]).Distinct().OrderBy(p => p.MetadataToken))
+        {
+            if (!types.Any(t => left[t] > 0 && props[t].Contains(prop))) continue;      // every type it holds is found
+            if (MutagenGroups.Read(prop, ov) is not IMajorRecordGetterEnumerable group) continue;
+            System.Threading.Interlocked.Increment(ref Counters.GroupCopies);
+            foreach (var t in types)
+            {
+                if (left[t] == 0 || !props[t].Contains(prop)) continue;
+                var keys = byType[t];
+                foreach (var rec in group.EnumerateMajorRecords(t, throwIfUnknown: false))
+                    if (keys.Contains(rec.FormKey) && sink.TryAdd(rec.FormKey, rec) && --left[t] == 0) break;
+            }
+        }
+        foreach (var t in types)
+        {
+            foreach (var fk in byType[t]) if (!sink.ContainsKey(fk)) flat.Add(fk);
+            byType.Remove(t);
+        }
     }
 
     internal IMajorRecordGetter FetchRecord(OverlaySession session, string pluginName, FormKey fk, IndexSnapshot s)
