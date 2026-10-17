@@ -1,0 +1,1 @@
+- **A facegen check is faster with the same answer: a whole-order check takes about a quarter of the time or less, and a `plugins=` check drops from minutes to seconds.** Run `housecarl_check` with `findings=["facegen"], plugins=["Skyrim.esm"]` and time it.

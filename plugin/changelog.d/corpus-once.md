@@ -1,0 +1,1 @@
+- **Whole-record reads are many times faster: `form=everything` over 300 records drops from about 16 s to 0.25 s.** Time a `form=everything` read of a few hundred records to check.
